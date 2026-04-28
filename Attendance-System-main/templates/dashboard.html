@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+{% block title %}My Dashboard — CDGI{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden" style="margin-top:-1px">
+<aside class="w-60 bg-primary text-white flex flex-col shadow-xl flex-shrink-0">
+  <div class="p-4 border-b border-blue-800">
+    <div class="flex items-center gap-3">
+      <div id="sb-av" class="w-12 h-12 rounded-xl bg-accent flex items-center justify-center overflow-hidden border-2 border-accent/50 shadow flex-shrink-0">
+        <i class="fas fa-user text-primary text-lg"></i>
+      </div>
+      <div class="min-w-0">
+        <p id="sb-name"  class="font-black text-sm truncate">Loading...</p>
+        <p id="sb-empid" class="text-accent text-xs font-bold"></p>
+        <p id="sb-dept"  class="text-blue-300 text-xs truncate"></p>
+      </div>
+    </div>
+  </div>
+  <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+    <button onclick="show('overview')" class="sb-btn active" data-s="overview"><i class="fas fa-home w-4"></i>Overview</button>
+    <button onclick="show('calendar')" class="sb-btn" data-s="calendar"><i class="fas fa-calendar-alt w-4"></i>Calendar</button>
+    <button onclick="show('log')"      class="sb-btn" data-s="log"><i class="fas fa-calendar-check w-4"></i>Attendance Log</button>
+    <button onclick="show('report')"   class="sb-btn" data-s="report"><i class="fas fa-chart-bar w-4"></i>Monthly Report</button>
+    <button onclick="show('profile')"  class="sb-btn" data-s="profile"><i class="fas fa-id-card w-4"></i>My Profile</button>
+    <a href="/scan" class="sb-btn" style="color:var(--accent);background:rgba(200,169,81,.12)">
+      <i class="fas fa-camera w-4"></i>Mark Attendance
+    </a>
+  </nav>
+  <div class="p-3 border-t border-blue-800">
+    <a href="/logout" class="sb-btn text-red-400 hover:text-red-300"><i class="fas fa-sign-out-alt w-4"></i>Logout</a>
+  </div>
+</aside>
+
+<div class="flex-1 flex flex-col overflow-hidden">
+  <header class="bg-white shadow-sm px-6 py-3 flex items-center justify-between flex-shrink-0 border-b border-gray-100">
+    <div>
+      <h1 id="pg-title" class="text-lg font-black text-primary font-raleway">Overview</h1>
+      <p id="pg-date" class="text-gray-400 text-xs"></p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="live-t" class="font-mono text-primary font-bold text-sm bg-blue-50 px-3 py-1 rounded-lg border border-blue-100"></div>
+      <a href="/scan" class="btn btn-primary btn-sm"><i class="fas fa-camera"></i> Mark Attendance</a>
+    </div>
+  </header>
+  <main class="flex-1 overflow-y-auto p-6 bg-gray-50">
+
+    <!-- OVERVIEW -->
+    <div id="sec-overview" class="sec-content space-y-5">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="stat-card green"><p class="text-xs text-gray-500 font-semibold uppercase">Present</p><p id="s-p" class="text-3xl font-black text-green-700 mt-1">—</p><p class="text-xs text-gray-400">This month</p></div>
+        <div class="stat-card red"><p class="text-xs text-gray-500 font-semibold uppercase">Absent</p><p id="s-a" class="text-3xl font-black text-red-600 mt-1">—</p><p class="text-xs text-gray-400">This month</p></div>
+        <div class="stat-card orange"><p class="text-xs text-gray-500 font-semibold uppercase">Half Day</p><p id="s-h" class="text-3xl font-black text-orange-600 mt-1">—</p><p class="text-xs text-gray-400">This month</p></div>
+        <div class="stat-card blue"><p class="text-xs text-gray-500 font-semibold uppercase">Avg Hours</p><p id="s-hr" class="text-3xl font-black text-blue-700 mt-1">—</p><p class="text-xs text-gray-400">Per day</p></div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-primary text-sm mb-3 flex items-center gap-2"><i class="fas fa-calendar-day text-accent"></i> Today's Attendance</h3>
+        <div id="today-ov" class="text-gray-400 text-sm text-center py-3">Loading...</div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-primary text-sm mb-3">Monthly Attendance Rate</h3>
+        <div class="flex items-center gap-3">
+          <div class="progress flex-1"><div id="att-bar" class="progress-bar" style="width:0%"></div></div>
+          <span id="att-pct" class="text-primary font-black text-sm w-12 text-right">0%</span>
+        </div>
+        <p id="att-lbl" class="text-gray-400 text-xs mt-2"></p>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 class="font-bold text-primary text-sm">Recent Records</h3>
+          <button onclick="show('log')" class="text-xs text-primary font-bold hover:text-accent">View All</button>
+        </div>
+        <div class="tbl-wrap"><table class="data-tbl"><thead><tr>
+          <th>Date</th><th>Day</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th>
+        </tr></thead><tbody id="recent-tb"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- CALENDAR -->
+    <div id="sec-calendar" class="sec-content hidden space-y-4">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h3 class="font-bold text-primary text-sm flex-1 flex items-center gap-2">
+            <i class="fas fa-calendar-alt text-accent"></i> Attendance Calendar
+          </h3>
+          <select id="cal-month" class="inp text-xs" style="width:180px" onchange="loadCalendar()"></select>
+          <button onclick="exportCSV(calLogData,'calendar')" class="btn btn-ghost btn-sm"><i class="fas fa-download"></i> CSV</button>
+        </div>
+        <div class="flex flex-wrap gap-3 mb-4 text-xs font-semibold">
+          <span class="flex items-center gap-1.5"><span style="width:14px;height:14px;background:#22c55e;border-radius:3px;display:inline-block"></span>Present</span>
+          <span class="flex items-center gap-1.5"><span style="width:14px;height:14px;background:#f87171;border-radius:3px;display:inline-block"></span>Absent</span>
+          <span class="flex items-center gap-1.5"><span style="width:14px;height:14px;background:#facc15;border-radius:3px;display:inline-block"></span>Half Day</span>
+          <span class="flex items-center gap-1.5"><span style="width:14px;height:14px;background:#e5e7eb;border-radius:3px;display:inline-block"></span>Sunday</span>
+        </div>
+        <div id="cal-grid"></div>
+        <div id="cal-summary" class="mt-4 grid grid-cols-3 gap-3"></div>
+      </div>
+      <div id="cal-detail" class="hidden bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div class="flex items-center justify-between mb-3">
+          <h4 id="cal-det-title" class="font-bold text-primary text-sm"></h4>
+          <button onclick="document.getElementById('cal-detail').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xs">✕ Close</button>
+        </div>
+        <div id="cal-det-body"></div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <div id="sec-log" class="sec-content hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <h3 class="font-bold text-primary text-sm flex-1">Attendance Log</h3>
+          <select id="log-month" class="inp text-xs" style="width:180px" onchange="loadLog()"></select>
+          <button onclick="exportCSV(logData,'attendance_log')" class="btn btn-ghost btn-sm"><i class="fas fa-download"></i> CSV</button>
+        </div>
+        <div id="log-loading" class="text-center py-8 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>
+        <div class="tbl-wrap"><table class="data-tbl"><thead><tr>
+          <th>#</th><th>Date</th><th>Day</th><th>In Time</th><th>In Photo</th><th>Out Time</th><th>Out Photo</th><th>Hours</th><th>Status</th>
+        </tr></thead><tbody id="log-tb"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- REPORT -->
+    <div id="sec-report" class="sec-content hidden space-y-5">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h3 class="font-bold text-primary text-sm flex-1 flex items-center gap-2"><i class="fas fa-chart-bar text-accent"></i> Monthly Summary Report</h3>
+          <select id="rep-month" class="inp text-xs" style="max-width:200px;display:inline-block" onchange="loadReport()"></select>
+        </div>
+        <div id="rep-loading" class="text-center py-8 text-gray-400 text-sm hidden"><i class="fas fa-spinner fa-spin mr-1"></i> Loading report...</div>
+        <div id="rep-box" class="mt-2 text-gray-400 text-sm text-center py-6">Select a month to view your report.</div>
+      </div>
+    </div>
+
+    <!-- PROFILE -->
+    <div id="sec-profile" class="sec-content hidden">
+      <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 max-w-md">
+        <div class="flex items-center gap-5 mb-6">
+          <img id="pf-photo" src="" class="hidden w-24 h-24 rounded-2xl object-cover border-2 border-accent shadow">
+          <div id="pf-av" class="w-24 h-24 rounded-2xl bg-primary flex items-center justify-center shadow">
+            <i class="fas fa-user text-accent text-3xl"></i>
+          </div>
+          <div>
+            <h2 id="pf-name" class="text-xl font-black text-primary"></h2>
+            <p id="pf-empid" class="text-accent font-bold text-sm"></p>
+            <p id="pf-desig" class="text-gray-500 text-sm"></p>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4 text-sm" id="pf-details"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let faculty = null, logData = [], calLogData = [], calDayMap = {};
+const titles = { overview:"Overview", calendar:"Attendance Calendar", log:"Attendance Log", report:"Monthly Report", profile:"My Profile" };
+
+/* ── IST date helpers ── */
+function istNow() {
+  // Returns current date/time in IST regardless of browser timezone
+  const now = new Date();
+  const ist = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
+  return ist;
+}
+function istToday() {
+  return istNow().toISOString().slice(0, 10);
+}
+function istMonth() {
+  return istNow().toISOString().slice(0, 7);
+}
+
+/* ── Clock ── */
+function tick() {
+  const n = new Date();
+  document.getElementById("live-t").textContent = n.toLocaleTimeString("en-IN");
+  document.getElementById("pg-date").textContent = n.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
+setInterval(tick, 1000); tick();
+
+/* ── Section switch ── */
+function show(s) {
+  document.querySelectorAll(".sec-content").forEach(e => e.classList.add("hidden"));
+  document.querySelectorAll(".sb-btn[data-s]").forEach(b => b.classList.remove("active"));
+  document.getElementById("sec-" + s).classList.remove("hidden");
+  document.querySelector('[data-s="' + s + '"]')?.classList.add("active");
+  document.getElementById("pg-title").textContent = titles[s] || s;
+  if (s === "log")      loadLog();
+  if (s === "report")   loadReport();
+  if (s === "calendar") loadCalendar();
+  if (s === "profile")  loadProfile();
+}
+
+/* ── Auto-refresh after attendance marked ── */
+function checkAttendanceUpdate() {
+  const lastMarked = sessionStorage.getItem("lastAttendanceMarked");
+  const now = Date.now();
+  if (lastMarked && (now - parseInt(lastMarked)) < 5000) {
+    loadOverview();
+    if (!document.getElementById("sec-calendar").classList.contains("hidden")) loadCalendar();
+    if (!document.getElementById("sec-log").classList.contains("hidden")) loadLog();
+    sessionStorage.removeItem("lastAttendanceMarked");
+  }
+}
+
+/* ── Fill month dropdowns (last 18 months) ── */
+function fillMonths(ids) {
+  const n = istNow(); let o = "";
+  for (let i = 0; i < 18; i++) {
+    const d = new Date(n.getFullYear(), n.getMonth() - i, 1);
+    const v = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+    o += '<option value="' + v + '"' + (i === 0 ? " selected" : "") + ">" +
+         d.toLocaleDateString("en-IN", {month:"long", year:"numeric"}) + "</option>";
+  }
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = o; });
+}
+fillMonths(["log-month", "rep-month", "cal-month"]);
+
+/* ── Helpers ── */
+const fmtDate = d => d ? new Date(d + "T00:00").toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}) : "--";
+const fmtDay  = d => d ? new Date(d + "T00:00").toLocaleDateString("en-IN",{weekday:"short"}) : "";
+const badge   = s => ({
+  present:  '<span class="badge badge-present">Present</span>',
+  absent:   '<span class="badge badge-absent">Absent</span>',
+  half_day: '<span class="badge badge-halfday">Half Day</span>'
+})[s] || s;
+const thumb = p => p ? '<img src="' + p + '" class="photo-thumb" onerror="this.style.display=\'none\'">' : '<span class="text-gray-300 text-xs">--</span>';
+
+/* ── Working days (Mon–Sat, excl. Sunday) ── */
+function getWorkingDaysUpToToday(yr, mo) {
+  const today = istToday();
+  const dim   = new Date(yr, mo, 0).getDate();
+  let days = 0;
+  for (let d = 1; d <= dim; d++) {
+    const ds = yr + "-" + String(mo).padStart(2,"0") + "-" + String(d).padStart(2,"0");
+    if (ds > today) break;
+    if (new Date(ds + "T00:00").getDay() !== 0) days++; // exclude Sunday
+  }
+  return days;
+}
+
+/* ── Init ── */
+async function init() {
+  try {
+    const res = await fetch("/api/auth/me", { cache:"no-store", credentials:"same-origin" });
+    if (!res.ok) { window.location.replace("/login"); return; }
+    faculty = await res.json();
+    document.getElementById("sb-name").textContent  = faculty.name;
+    document.getElementById("sb-empid").textContent = faculty.employeeId;
+    document.getElementById("sb-dept").textContent  = faculty.department || "";
+    if (faculty.faceImagePath)
+      document.getElementById("sb-av").innerHTML = '<img src="' + faculty.faceImagePath + '" class="w-full h-full object-cover">';
+    await loadOverview();
+    loadProfile();
+    
+    // Check every 1 second for attendance updates
+    setInterval(checkAttendanceUpdate, 1000);
+  } catch(e) { window.location.replace("/login"); }
+}
+
+/* ── Overview ── */
+async function loadOverview() {
+  const month = istMonth();
+  try {
+    const ts = Date.now();
+    const [sumR, todR, recR] = await Promise.all([
+      fetch("/api/report/summary?month=" + month + "&_=" + ts, { cache:"no-store" }),
+      fetch("/api/attendance/today-status?_=" + ts,            { cache:"no-store" }),
+      fetch("/api/report/my?month=" + month + "&_=" + ts,      { cache:"no-store" }),
+    ]);
+    const sum  = await sumR.json();
+    const tod  = await todR.json();
+    const recs = await recR.json();
+
+    document.getElementById("s-p").textContent  = sum.present    || 0;
+    document.getElementById("s-a").textContent  = sum.absent     || 0;
+    document.getElementById("s-h").textContent  = sum.half_day   || 0;
+    document.getElementById("s-hr").textContent = (sum.avg_working_hours || 0) + "h";
+
+    const pct = sum.working_days ? Math.round(((sum.present + (sum.half_day * 0.5)) / sum.working_days) * 100) : 0;
+    document.getElementById("att-bar").style.width = pct + "%";
+    document.getElementById("att-pct").textContent = pct + "%";
+    document.getElementById("att-lbl").textContent =
+      sum.present + " present + " + sum.half_day + " half-day of " + sum.working_days + " working days";
+
+    // Today box
+    const tEl = document.getElementById("today-ov");
+    if (!tod.hasRecord || !tod.sessions?.length) {
+      tEl.innerHTML = '<p class="text-gray-400"><i class="fas fa-clock mr-1"></i>Not checked in yet today.</p>' +
+        '<a href="/scan" class="btn btn-primary btn-sm mt-3 inline-flex"><i class="fas fa-camera"></i> Mark Attendance</a>';
+    } else {
+      const sessions = tod.sessions || [];
+      let sessHtml = sessions.map((s, i) => `
+        <div class="bg-gray-50 rounded-xl p-3 border border-gray-100 text-sm">
+          <p class="text-xs text-gray-400 font-bold mb-2">Session ${i+1}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="text-center">
+              <p class="text-xs text-gray-500">Check In</p>
+              <p class="font-black text-green-700">${s.checkInTime || "--"}</p>
+              ${s.checkInImagePath ? `<img src="${s.checkInImagePath}" class="photo-thumb mx-auto mt-1" onerror="this.style.display='none'">` : ""}
+            </div>
+            <div class="text-center">
+              <p class="text-xs text-gray-500">Check Out</p>
+              <p class="font-black text-purple-700">${s.checkOutTime || '<span class="text-orange-500 text-xs">Open</span>'}</p>
+              ${s.checkOutImagePath ? `<img src="${s.checkOutImagePath}" class="photo-thumb mx-auto mt-1" onerror="this.style.display='none'">` : ""}
+            </div>
+          </div>
+          ${s.checkOutTime ? `<p class="text-xs text-center text-blue-600 font-semibold mt-1">${s.sessionHours}h</p>` : ""}
+        </div>`).join("");
+
+      tEl.innerHTML =
+        `<div class="grid grid-cols-2 md:grid-cols-3 gap-2 mb-3">
+          <div class="bg-blue-50 rounded-xl p-3 border border-blue-100 text-center">
+            <p class="text-xs text-gray-500 font-semibold">Total Hours</p>
+            <p class="font-black text-blue-700 text-xl">${tod.workingHours || 0}h</p>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-3 border border-gray-100 text-center">
+            <p class="text-xs text-gray-500 font-semibold">Status</p>
+            <p class="mt-1">${badge(tod.status)}</p>
+          </div>
+          <div class="bg-orange-50 rounded-xl p-3 border border-orange-100 text-center">
+            <p class="text-xs text-gray-500 font-semibold">Sessions</p>
+            <p class="font-black text-orange-600 text-xl">${tod.sessionCount || 1}</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">${sessHtml}</div>`;
+    }
+
+    // Recent records table
+    const tb = document.getElementById("recent-tb");
+    if (!recs.length) {
+      tb.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-6">No records this month.</td></tr>';
+      return;
+    }
+    tb.innerHTML = recs.slice(0, 7).map(r =>
+      '<tr class="' + (r.status === "absent" ? "row-absent" : r.status === "half_day" ? "row-halfday" : "row-present") + '">' +
+      '<td class="font-semibold">' + fmtDate(r.attendance_date) + '</td>' +
+      '<td class="text-gray-400">' + fmtDay(r.attendance_date)  + '</td>' +
+      '<td class="text-green-700 font-bold">'  + (r.check_in_time  || "--") + '</td>' +
+      '<td class="text-purple-700 font-bold">' + (r.check_out_time || "--") + '</td>' +
+      '<td class="font-semibold">' + (r.working_hours || 0) + 'h</td>' +
+      '<td>' + badge(r.status) + '</td></tr>'
+    ).join("");
+  } catch(e) { console.error("Overview error:", e); }
+}
+
+/* ── Calendar ── */
+async function loadCalendar() {
+  const month = document.getElementById("cal-month").value || istMonth();
+  document.getElementById("cal-month").value = month;
+  try {
+    document.getElementById("cal-grid").innerHTML = '<p class="text-center text-gray-400 py-6"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</p>';
+    const res     = await fetch("/api/report/calendar?month=" + month + "&_=" + Date.now(), { cache:"no-store" });
+    const records = await res.json();
+    calDayMap = {}; calLogData = records;
+    records.forEach(r => { calDayMap[r.attendance_date] = r; });
+
+    const [yr, mo] = month.split("-").map(Number);
+    renderMonth(yr, mo);
+    renderCalSummary(yr, mo);
+  } catch(e) { console.error("Calendar error:", e); }
+}
+
+function renderMonth(yr, mo) {
+  const today    = istToday();
+  const dim      = new Date(yr, mo, 0).getDate();
+  const firstDay = new Date(yr, mo - 1, 1).getDay();
+  const dn       = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+  let h = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center">';
+  dn.forEach(d => { h += '<div style="font-size:11px;font-weight:700;color:#94a3b8;padding:6px 2px">' + d + '</div>'; });
+  for (let i = 0; i < firstDay; i++) h += "<div></div>";
+
+  for (let d = 1; d <= dim; d++) {
+    const ds  = yr + "-" + String(mo).padStart(2,"0") + "-" + String(d).padStart(2,"0");
+    const dow = new Date(ds + "T00:00").getDay(); // FIX: T00:00 prevents UTC to IST shift
+    const rec = calDayMap[ds];
+    const isToday  = ds === today;
+    const isFuture = ds > today;
+    const isSunday = dow === 0;
+
+    let bg = "#f1f5f9", color = "#94a3b8", dot = "";
+
+    if (isSunday) {
+      bg = "#f8fafc"; color = "#cbd5e1";
+    } else if (!isFuture) {
+      if (rec) {
+        if (rec.status === "present")  { bg = "#22c55e"; color = "white"; dot = rec.check_in_time ? "●" : ""; }
+        else if (rec.status === "half_day") { bg = "#facc15"; color = "#713f12"; }
+        else { bg = "#f87171"; color = "white"; }
+      } else {
+        bg = "#fee2e2"; color = "#ef4444"; // absent (no record on working day past)
+      }
+    }
+
+    const ring = isToday ? "outline:2.5px solid #1e3a5f;outline-offset:2px;" : "";
+    const title = rec ? "In: " + (rec.check_in_time || "--") + " | Out: " + (rec.check_out_time || "--") + " | " + (rec.working_hours || 0) + "h | " + rec.status : (isSunday ? "Sunday - Weekly Off" : (isFuture ? "Future" : "Absent"));
+    // Small label inside cell: check-in time for present, A for absent, OFF for sunday
+    const cellLabel = isSunday ? "OFF" : (isFuture ? "" : (rec ? (rec.check_in_time ? rec.check_in_time.slice(0,5) : (rec.status === "half_day" ? "H" : "P")) : "A"));
+
+    h += '<div onclick="showDet(\'' + ds + '\')\" title="' + title + '" style="background:' + bg + ';color:' + color + ';border-radius:8px;padding:8px 2px 5px;font-size:13px;font-weight:700;cursor:pointer;' + ring + 'user-select:none;display:flex;flex-direction:column;align-items:center;gap:1px"><span>' + d + '</span><span style="font-size:9px;font-weight:600;opacity:0.85">' + cellLabel + '</span></div>';
+  }
+  h += "</div>";
+  document.getElementById("cal-grid").innerHTML = h;
+}
+
+function renderCalSummary(yr, mo) {
+  const today = istToday();
+  const dim   = new Date(yr, mo, 0).getDate();
+  let p = 0, a = 0, h = 0;
+  for (let d = 1; d <= dim; d++) {
+    const ds  = yr + "-" + String(mo).padStart(2,"0") + "-" + String(d).padStart(2,"0");
+    if (ds > today) continue;
+    if (new Date(ds + "T00:00").getDay() === 0) continue; // FIX
+    const rec = calDayMap[ds];
+    if (rec) {
+      if (rec.status === "present")  p++;
+      else if (rec.status === "half_day") h++;
+      else a++;
+    } else {
+      a++; // no record on a past working day = absent
+    }
+  }
+  document.getElementById("cal-summary").innerHTML =
+    '<div class="bg-green-50 rounded-xl p-3 border border-green-100 text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Present</p><p class="font-black text-green-700 text-3xl mt-1">' + p + '</p></div>' +
+    '<div class="bg-yellow-50 rounded-xl p-3 border border-yellow-100 text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Half Day</p><p class="font-black text-yellow-600 text-3xl mt-1">' + h + '</p></div>' +
+    '<div class="bg-red-50 rounded-xl p-3 border border-red-100 text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Absent</p><p class="font-black text-red-600 text-3xl mt-1">' + a + '</p></div>';
+}
+
+function showDet(ds) {
+  const rec  = calDayMap[ds];
+  const el   = document.getElementById("cal-detail");
+  const isSun = new Date(ds + "T00:00").getDay() === 0;
+  document.getElementById("cal-det-title").textContent =
+    new Date(ds + "T00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  const body = document.getElementById("cal-det-body");
+  if (isSun) {
+    body.innerHTML = '<p class="text-gray-400 text-sm"><i class="fas fa-moon text-blue-300 mr-1"></i>Sunday — Weekly Off</p>';
+  } else if (!rec) {
+    body.innerHTML = '<p class="text-gray-400 text-sm"><i class="fas fa-times-circle text-red-400 mr-1"></i>No attendance record — Absent</p>';
+  } else {
+    body.innerHTML =
+      '<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px">' +
+      '<div style="background:#f0fdf4;border-radius:10px;padding:12px;border:1px solid #bbf7d0"><p style="font-size:10px;color:#94a3b8">Check In</p><p style="font-weight:900;color:#16a34a;font-size:22px">' + (rec.check_in_time || "--") + '</p></div>' +
+      '<div style="background:#f5f3ff;border-radius:10px;padding:12px;border:1px solid #ddd6fe"><p style="font-size:10px;color:#94a3b8">Check Out</p><p style="font-weight:900;color:#7c3aed;font-size:22px">' + (rec.check_out_time || "--") + '</p></div>' +
+      '<div style="background:#eff6ff;border-radius:10px;padding:12px;border:1px solid #bfdbfe"><p style="font-size:10px;color:#94a3b8">Working Hours</p><p style="font-weight:900;color:#1d4ed8;font-size:22px">' + (rec.working_hours || 0) + 'h</p></div>' +
+      '<div style="background:#f8fafc;border-radius:10px;padding:12px;border:1px solid #e2e8f0"><p style="font-size:10px;color:#94a3b8">Status</p><p style="margin-top:6px">' + badge(rec.status) + '</p></div>' +
+      '</div>';
+  }
+  el.classList.remove("hidden");
+}
+
+/* ── Attendance Log ── */
+async function loadLog() {
+  const month = document.getElementById("log-month").value;
+  const loadEl = document.getElementById("log-loading");
+  const tb    = document.getElementById("log-tb");
+  loadEl.classList.remove("hidden");
+  tb.innerHTML = "";
+  try {
+    const res = await fetch("/api/report/my?month=" + month + "&_=" + Date.now(), { cache:"no-store" });
+    logData   = await res.json();
+    loadEl.classList.add("hidden");
+
+    // Build complete log including absent days
+    const [yr, mo] = month.split("-").map(Number);
+    const dim = new Date(yr, mo, 0).getDate();
+    const today = istToday();
+
+    // Map records by date
+    const recMap = {};
+    logData.forEach(r => { recMap[r.attendance_date] = r; });
+
+    let rows = "";
+    let idx  = 1;
+    for (let d = 1; d <= dim; d++) {
+      const ds  = yr + "-" + String(mo).padStart(2,"0") + "-" + String(d).padStart(2,"0");
+      if (ds > today) continue;
+      const dow = new Date(ds + "T00:00").getDay(); // FIX: T00:00 prevents UTC to IST shift
+      if (dow === 0) continue; // skip Sunday
+
+      const r = recMap[ds];
+      if (r) {
+        rows += '<tr class="' + (r.status === "half_day" ? "row-halfday" : "row-present") + '">' +
+          '<td class="text-gray-400 font-bold">' + idx++ + '</td>' +
+          '<td class="font-semibold">' + fmtDate(ds) + '</td>' +
+          '<td class="text-gray-400">' + fmtDay(ds) + '</td>' +
+          '<td class="text-green-700 font-bold">'  + (r.check_in_time  || "--") + '</td>' +
+          '<td>' + thumb(r.check_in_image_path)  + '</td>' +
+          '<td class="text-purple-700 font-bold">' + (r.check_out_time || "--") + '</td>' +
+          '<td>' + thumb(r.check_out_image_path) + '</td>' +
+          '<td class="font-semibold">' + (r.working_hours || 0) + 'h</td>' +
+          '<td>' + badge(r.status) + '</td></tr>';
+      } else {
+        rows += '<tr class="row-absent">' +
+          '<td class="text-gray-400 font-bold">' + idx++ + '</td>' +
+          '<td class="font-semibold">' + fmtDate(ds) + '</td>' +
+          '<td class="text-gray-400">' + fmtDay(ds) + '</td>' +
+          '<td class="text-gray-300">--</td><td>--</td><td class="text-gray-300">--</td><td>--</td>' +
+          '<td class="text-gray-300">--</td>' +
+          '<td>' + badge("absent") + '</td></tr>';
+      }
+    }
+    tb.innerHTML = rows || '<tr><td colspan="9" class="text-center text-gray-400 py-6">No records this month.</td></tr>';
+  } catch(e) {
+    loadEl.classList.add("hidden");
+    tb.innerHTML = '<tr><td colspan="9" class="text-center text-red-400 py-6">Error loading data.</td></tr>';
+  }
+}
+
+/* ── Monthly Report ── */
+async function loadReport() {
+  const month = document.getElementById("rep-month").value;
+  const box   = document.getElementById("rep-box");
+  const loadEl = document.getElementById("rep-loading");
+  box.innerHTML = ""; loadEl.classList.remove("hidden");
+  try {
+    const res = await fetch("/api/report/summary?month=" + month + "&_=" + Date.now(), { cache:"no-store" });
+    const d   = await res.json();
+    loadEl.classList.add("hidden");
+
+    const pct = d.working_days ? Math.round(((d.present + (d.half_day * 0.5)) / d.working_days) * 100) : 0;
+    const barColor = pct >= 75 ? "#16a34a" : pct >= 50 ? "#f59e0b" : "#dc2626";
+
+    box.innerHTML =
+      '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' +
+      '<div class="stat-card green text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Present</p><p class="text-4xl font-black text-green-700 mt-1">' + (d.present || 0) + '</p><p class="text-xs text-gray-400 mt-1">Days</p></div>' +
+      '<div class="stat-card red text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Absent</p><p class="text-4xl font-black text-red-600 mt-1">' + (d.absent || 0) + '</p><p class="text-xs text-gray-400 mt-1">Days</p></div>' +
+      '<div class="stat-card orange text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Half Day</p><p class="text-4xl font-black text-orange-600 mt-1">' + (d.half_day || 0) + '</p><p class="text-xs text-gray-400 mt-1">Days</p></div>' +
+      '<div class="stat-card blue text-center"><p class="text-xs text-gray-500 font-semibold uppercase">Avg Hours</p><p class="text-4xl font-black text-blue-700 mt-1">' + (d.avg_working_hours || 0) + 'h</p><p class="text-xs text-gray-400 mt-1">Per day</p></div>' +
+      '</div>' +
+      '<div class="bg-gray-50 rounded-xl p-5 border border-gray-100">' +
+      '<div class="flex justify-between items-center mb-2"><span class="text-sm font-bold text-gray-700">Attendance Rate</span><span class="font-black text-primary text-lg">' + pct + '%</span></div>' +
+      '<div class="progress" style="height:12px"><div class="progress-bar" style="width:' + pct + '%;background:' + barColor + ';height:12px"></div></div>' +
+      '<p class="text-xs text-gray-400 mt-2">' + (d.present || 0) + ' present + ' + (d.half_day || 0) + ' half-day out of ' + (d.working_days || 0) + ' working days (Mon–Sat, excluding Sunday)</p>' +
+      '</div>';
+  } catch(e) {
+    loadEl.classList.add("hidden");
+    box.innerHTML = '<p class="text-red-400 text-sm">Error loading report.</p>';
+  }
+}
+
+/* ── Profile ── */
+function loadProfile() {
+  if (!faculty) return;
+  document.getElementById("pf-name").textContent  = faculty.name;
+  document.getElementById("pf-empid").textContent = faculty.employeeId;
+  document.getElementById("pf-desig").textContent = faculty.designation || "";
+  if (faculty.faceImagePath) {
+    const img = document.getElementById("pf-photo");
+    img.src   = faculty.faceImagePath;
+    img.classList.remove("hidden");
+    document.getElementById("pf-av").classList.add("hidden");
+  }
+  document.getElementById("pf-details").innerHTML =
+    '<div><p class="lbl">Email</p><p class="font-semibold">' + (faculty.email || "--") + '</p></div>' +
+    '<div><p class="lbl">Phone</p><p class="font-semibold">' + (faculty.phone || "--") + '</p></div>' +
+    '<div><p class="lbl">Department</p><p class="font-semibold">' + (faculty.department || "--") + '</p></div>' +
+    '<div><p class="lbl">Designation</p><p class="font-semibold">' + (faculty.designation || "--") + '</p></div>' +
+    '<div><p class="lbl">Face Registered</p><p class="font-semibold">' + (faculty.hasFaceRegistered ? '<span class="badge badge-present">✓ Yes</span>' : '<span class="badge badge-absent">No</span>') + '</p></div>' +
+    '<div><p class="lbl">Joined</p><p class="font-semibold">' + (faculty.createdAt?.slice(0,10) || "--") + '</p></div>';
+}
+
+/* ── CSV Export ── */
+function exportCSV(rows, filename) {
+  if (!rows?.length) { alert("No data to export."); return; }
+  const hdrs = ["Date","Day","Check In","Check Out","Working Hours","Status"];
+  const csv  = [hdrs, ...rows.map(r => [
+    r.attendance_date, fmtDay(r.attendance_date),
+    r.check_in_time || "", r.check_out_time || "",
+    r.working_hours || 0, r.status
+  ])].map(r => r.map(c => '"' + String(c).replace(/"/g,'""') + '"').join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = "data:text/csv;charset=utf-8," + encodeURIComponent(csv);
+  a.download = filename + "_" + (faculty?.employeeId || "") + "_" + istMonth() + ".csv";
+  a.click();
+}
+
+document.querySelectorAll("[id^='sec-']").forEach(el => el.classList.add("sec-content"));
+init();
+</script>
+{% endblock %}

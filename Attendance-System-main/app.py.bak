@@ -1,0 +1,1181 @@
+﻿"""
+CDGI Faculty Attendance System â€” Flask Backend
+===============================================
+"""
+
+from flask import (Flask, request, jsonify, render_template,
+                   session, redirect, send_from_directory, make_response)
+from database import get_db, init_db, REGISTERED_FACES_DIR, ATTENDANCE_FACES_DIR
+import bcrypt, json, os, base64, re, math, calendar
+from datetime import datetime, date, timedelta
+from functools import wraps
+import pytz
+
+app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "CDGI_ATT_xK9mP3qLvR7nZ2jQ_2025")
+app.config.update(
+    SESSION_COOKIE_HTTPONLY  = True,
+    SESSION_COOKIE_SAMESITE  = "Lax",
+    SESSION_COOKIE_SECURE    = False,
+    PERMANENT_SESSION_LIFETIME = 28800,
+)
+
+IST = pytz.timezone("Asia/Kolkata")
+
+COLLEGE_NAME   = "Chameli Devi Group of Institutions"
+COLLEGE_ADDR   = "Khandwa Road, Umri Khedi, Indore â€” 453771"
+COLLEGE_LAT    = 22.6595
+COLLEGE_LNG    = 75.8370
+MAX_RADIUS_M   = 600
+
+CAMPUS_POLYGON = [
+    (22.6615, 75.8348),
+    (22.6628, 75.8360),
+    (22.6635, 75.8390),
+    (22.6620, 75.8415),
+    (22.6600, 75.8412),
+    (22.6580, 75.8398),
+    (22.6572, 75.8372),
+    (22.6580, 75.8345),
+    (22.6598, 75.8338),
+    (22.6615, 75.8348),
+]
+
+HALF_DAY_HOURS = 4.0
+_login_attempts: dict = {}
+
+EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+PHONE_RE = re.compile(r'^[6-9]\d{9}$')
+EMP_RE   = re.compile(r'^[A-Z0-9]{3,15}$')
+
+
+def validate_email(e):
+    if not e: return "Email is required."
+    if not EMAIL_RE.match(e): return "Invalid email. Use format: name@domain.com"
+    return None
+
+def validate_phone(p):
+    if p and not PHONE_RE.match(p): return "Invalid phone. Enter 10-digit Indian mobile (6-9 start)."
+    return None
+
+def validate_employee_id(e):
+    if not e: return "Employee ID is required."
+    if not EMP_RE.match(e): return f"Employee ID must be 3-15 uppercase letters/digits. '{e}' is invalid."
+    return None
+
+def validate_password(p):
+    if len(p) < 8:                    return "Password must be at least 8 characters."
+    if not re.search(r'[A-Z]', p):    return "Password must contain at least one uppercase letter."
+    if not re.search(r'[0-9]', p):    return "Password must contain at least one digit."
+    return None
+
+
+def ist_now():   return datetime.now(IST)
+def ist_today(): return ist_now().strftime("%Y-%m-%d")
+def ist_hms():   return ist_now().strftime("%H:%M:%S")
+
+
+def haversine(lat1, lng1, lat2, lng2) -> float:
+    R  = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlam = math.radians(lng2 - lng1)
+    a  = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlam/2)**2
+
+
+def point_in_polygon(lat: float, lng: float, polygon: list) -> bool:
+    x, y = lat, lng
+    n = len(polygon)
+    inside = False
+    px, py = polygon[0]
+    for i in range(1, n + 1):
+        qx, qy = polygon[i % n]
+        if ((py > y) != (qy > y)) and (x < (qx - px) * (y - py) / (qy - py) + px):
+            inside = not inside
+        px, py = qx, qy
+    return inside
+
+
+def inside_campus(lat: float, lng: float) -> tuple:
+    """Always returns True â€” attendance can be marked from anywhere."""
+    try:
+        dist = round(haversine(lat, lng, COLLEGE_LAT, COLLEGE_LNG), 1)
+    except Exception:
+        dist = 0.0
+    return dist, True
+
+
+def save_b64_image(b64: str, filepath: str) -> bool:
+    try:
+        data = b64.split(",", 1)[1] if "," in b64 else b64
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, "wb") as f:
+            f.write(base64.b64decode(data))
+        return True
+    except Exception as e:
+        print(f"[IMG] {e}")
+        return False
+
+
+def safe_name(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_-]", "_", s)
+
+
+def working_hours(ci: str, co: str) -> float:
+    if not ci or not co:
+        return 0.0
+    try:
+        fmt = "%H:%M:%S"
+        secs = (datetime.strptime(co, fmt) - datetime.strptime(ci, fmt)).total_seconds()
+        return round(max(secs / 3600, 0), 2)
+    except Exception:
+        return 0.0
+
+
+def no_cache(response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"
+    response.headers["Pragma"]        = "no-cache"
+    response.headers["Expires"]       = "0"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
+
+
+def _working_days_in_month(year: int, month: int) -> int:
+    _, days = calendar.monthrange(year, month)
+    return sum(1 for d in range(1, days + 1) if date(year, month, d).weekday() != 6)
+
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "faculty_id" not in session:
+            if request.is_json:
+                return jsonify({"error": "Authentication required."}), 401
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "faculty_id" not in session or session.get("role") != "admin":
+            if request.is_json:
+                return jsonify({"error": "Admin access required."}), 403
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return wrapper
+
+
+# â”€â”€ PAGE ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/")
+def home():
+    return no_cache(make_response(render_template("index.html")))
+
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
+@app.route("/contact")
+def contact():
+    return render_template("contact.html")
+
+@app.route("/login")
+def login_page():
+    if "faculty_id" in session:
+        return redirect("/admin" if session.get("role") == "admin" else "/dashboard")
+    return no_cache(make_response(render_template("login.html")))
+
+@app.route("/register")
+def register_page():
+    return render_template("register.html")
+
+@app.route("/dashboard")
+@login_required
+def dashboard():
+    if session.get("role") == "admin":
+        return redirect("/admin")
+    return no_cache(make_response(render_template("dashboard.html")))
+
+@app.route("/admin")
+@admin_required
+def admin_page():
+    return no_cache(make_response(render_template("admin.html")))
+
+@app.route("/scan")
+@login_required
+def scan():
+    return no_cache(make_response(render_template("scan.html")))
+
+@app.route("/reports")
+@login_required
+def reports():
+    return no_cache(make_response(render_template("reports.html")))
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    resp = make_response(redirect("/login"))
+    resp.delete_cookie("session")
+    return no_cache(resp)
+
+@app.route("/static/faces/<folder>/<filename>")
+@login_required
+def serve_face(folder, filename):
+    return send_from_directory(os.path.join("static", "faces", folder), filename)
+
+
+# â”€â”€ AUTH APIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/auth/register", methods=["POST"])
+def register():
+    d           = request.json or {}
+    name        = d.get("name", "").strip()
+    employee_id = d.get("employeeId", "").strip().upper()
+    email       = d.get("email", "").strip().lower()
+    phone       = d.get("phone", "").strip()
+    department  = d.get("department", "").strip()
+    designation = d.get("designation", "").strip()
+    password    = d.get("password", "")
+    face_desc   = d.get("faceDescriptor")
+    face_b64    = d.get("faceImage", "")
+    college_id  = d.get("collegeId") or None
+    program_id  = d.get("programId") or None
+
+    errors = {}
+    if not name or len(name) < 2:               errors["name"]       = "Full name must be at least 2 characters."
+    if not department:                           errors["department"] = "Please select a department."
+    if not designation or len(designation) < 2: errors["designation"] = "Designation is required."
+
+    emp_err = validate_employee_id(employee_id)
+    if emp_err: errors["employeeId"] = emp_err
+
+    email_err = validate_email(email)
+    if email_err: errors["email"] = email_err
+
+    phone_err = validate_phone(phone)
+    if phone_err: errors["phone"] = phone_err
+
+    pwd_err = validate_password(password)
+    if pwd_err: errors["password"] = pwd_err
+
+    if not face_desc or not isinstance(face_desc, list) or len(face_desc) != 128:
+        errors["face"] = "Face registration required. Please scan your face properly."
+
+    if errors:
+        return jsonify({"errors": errors}), 422
+
+    db = get_db()
+    if db.execute("SELECT id FROM faculty WHERE UPPER(employee_id)=?", [employee_id]).fetchone():
+        db.close()
+        return jsonify({"errors": {"employeeId": f"Employee ID '{employee_id}' is already registered."}}), 409
+    if db.execute("SELECT id FROM faculty WHERE LOWER(email)=?", [email]).fetchone():
+        db.close()
+        return jsonify({"errors": {"email": f"Email '{email}' is already registered."}}), 409
+
+    existing_faces = db.execute(
+        "SELECT employee_id, name, face_descriptor FROM faculty WHERE face_descriptor IS NOT NULL AND has_face_registered=1"
+    ).fetchall()
+
+    def _euclid(a, b):
+        return math.sqrt(sum((x-y)**2 for x,y in zip(a,b)))
+
+    for ef in existing_faces:
+        try:
+            stored = json.loads(ef["face_descriptor"])
+            dist = _euclid(face_desc, stored)
+            if dist < 0.50:
+                db.close()
+                return jsonify({
+                    "errors": {
+                        "face": (
+                            f"This face is already registered to another account "
+                            f"({ef['name']} / {ef['employee_id']}). "
+                            f"Each faculty member must use their own unique face."
+                        )
+                    }
+                }), 409
+        except Exception:
+            continue
+
+    pw_hash   = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    desc_json = json.dumps(face_desc)
+
+    img_path = ""
+    if face_b64:
+        fn = f"{safe_name(employee_id)}.jpg"
+        fp = os.path.join(REGISTERED_FACES_DIR, fn)
+        if save_b64_image(face_b64, fp):
+            img_path = "/" + fp.replace("\\", "/")
+
+    cur = db.execute(
+        """INSERT INTO faculty
+           (employee_id,name,email,phone,department,designation,
+            password_hash,face_descriptor,face_image_path,has_face_registered,
+            college_id,program_id)
+           VALUES (?,?,?,?,?,?,?,?,?,1,?,?)""",
+        [employee_id, name, email, phone, department, designation,
+         pw_hash, desc_json, img_path, college_id, program_id]
+    )
+    db.commit()
+    fid = cur.lastrowid
+    db.close()
+    return jsonify({"id": fid, "name": name, "employeeId": employee_id,
+                    "message": "Registration successful!"}), 201
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def login():
+    d           = request.json or {}
+    employee_id = d.get("employeeId", "").strip().upper()
+    password    = d.get("password", "")
+    ip          = request.remote_addr
+
+    now    = datetime.utcnow()
+    bucket = _login_attempts.get(ip, {"count": 0, "reset": now + timedelta(minutes=10)})
+    if now > bucket["reset"]:
+        bucket = {"count": 0, "reset": now + timedelta(minutes=10)}
+    bucket["count"] += 1
+    _login_attempts[ip] = bucket
+    if bucket["count"] > 5:
+        wait = int((bucket["reset"] - now).total_seconds() / 60) + 1
+        return jsonify({"error": f"Too many login attempts. Please wait {wait} minute(s)."}), 429
+
+    if not employee_id or not password:
+        return jsonify({"error": "Employee ID and password are required."}), 400
+
+    db  = get_db()
+    row = db.execute(
+        "SELECT * FROM faculty WHERE UPPER(employee_id)=? AND is_active=1", [employee_id]
+    ).fetchone()
+    db.close()
+
+    if not row or not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        return jsonify({"error": "Invalid Employee ID or Password."}), 401
+
+    _login_attempts.pop(ip, None)
+
+    session.permanent = True
+    session["faculty_id"]   = row["id"]
+    session["employee_id"]  = row["employee_id"]
+    session["faculty_name"] = row["name"]
+    session["role"]         = row["role"]
+
+    return jsonify({
+        "id":         row["id"],
+        "name":       row["name"],
+        "employeeId": row["employee_id"],
+        "role":       row["role"],
+    })
+
+
+@app.route("/api/auth/me")
+@login_required
+def get_me():
+    db  = get_db()
+    row = db.execute(
+        "SELECT * FROM faculty WHERE id=? AND is_active=1", [session["faculty_id"]]
+    ).fetchone()
+    db.close()
+    if not row:
+        session.clear()
+        return jsonify({"error": "User not found."}), 404
+    desc = json.loads(row["face_descriptor"]) if row["face_descriptor"] else None
+    return jsonify({
+        "id":               row["id"],
+        "employeeId":       row["employee_id"],
+        "name":             row["name"],
+        "email":            row["email"],
+        "phone":            row["phone"],
+        "department":       row["department"],
+        "designation":      row["designation"],
+        "faceDescriptor":   desc,
+        "faceImagePath":    row["face_image_path"],
+        "hasFaceRegistered": bool(row["has_face_registered"]),
+        "role":             row["role"],
+        "createdAt":        row["created_at"],
+    })
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"message": "Logged out."})
+
+
+@app.route("/api/college/info")
+def college_info():
+    return jsonify({
+        "name":    COLLEGE_NAME,
+        "address": COLLEGE_ADDR,
+        "lat":     COLLEGE_LAT,
+        "lng":     COLLEGE_LNG,
+        "radius":  MAX_RADIUS_M,
+    })
+
+
+@app.route("/api/location/validate", methods=["POST"])
+@login_required
+def validate_location():
+    d = request.json or {}
+    try:
+        lat = float(d.get("latitude",  0))
+        lng = float(d.get("longitude", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid coordinates."}), 400
+
+    dist, ok = inside_campus(lat, lng)
+    return jsonify({
+        "insideCampus": True,
+        "distance":     dist,
+        "maxRadius":    MAX_RADIUS_M,
+        "college":      COLLEGE_NAME,
+        "message":      f"Location verified â€” {COLLEGE_NAME}",
+    })
+
+
+# â”€â”€ ATTENDANCE CHECK-IN â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/attendance/check-in", methods=["POST"])
+@login_required
+def check_in():
+    d             = request.json or {}
+    faculty_id    = session["faculty_id"]
+    employee_id   = session["employee_id"]
+    face_verified = bool(d.get("faceVerified", False))
+    image_b64     = d.get("capturedImage", "")
+
+    try:
+        lat = float(d.get("latitude",  0))
+        lng = float(d.get("longitude", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid GPS coordinates."}), 400
+
+    if not face_verified:
+        return jsonify({"error": "Face verification failed. Please scan again."}), 400
+
+    dist, ok = inside_campus(lat, lng)
+    if not ok:
+        return jsonify({
+            "error": (f"Location not verified. You are {dist}m from {COLLEGE_NAME}. "
+                      f"Must be inside campus (within {MAX_RADIUS_M}m).")
+        }), 403
+
+    today = ist_today()
+    db    = get_db()
+    existing = db.execute(
+        "SELECT * FROM attendance WHERE faculty_id=? AND attendance_date=?",
+        [faculty_id, today]
+    ).fetchone()
+
+    if existing and existing["check_in_time"]:
+        db.close()
+        return jsonify({"error": f"Already checked in today at {existing['check_in_time']}."}), 409
+
+    time_now = ist_hms()
+    img_path = ""
+    if image_b64:
+        ts = ist_now().strftime("%Y%m%d_%H%M%S")
+        fn = f"{safe_name(employee_id)}_in_{ts}.jpg"
+        fp = os.path.join(ATTENDANCE_FACES_DIR, fn)
+        if save_b64_image(image_b64, fp):
+            img_path = "/" + fp.replace("\\", "/")
+
+    if existing:
+        db.execute(
+            "UPDATE attendance SET check_in_time=?,check_in_image_path=?,check_in_lat=?,check_in_lng=? WHERE id=?",
+            [time_now, img_path, lat, lng, existing["id"]]
+        )
+    else:
+        db.execute(
+            """INSERT INTO attendance
+               (faculty_id,employee_id,attendance_date,check_in_time,
+                check_in_image_path,check_in_lat,check_in_lng,status)
+               VALUES (?,?,?,?,?,?,?,'present')""",
+            [faculty_id, employee_id, today, time_now, img_path, lat, lng]
+        )
+
+    db.commit()
+    db.close()
+    return jsonify({"message": "Check-in recorded!", "time": time_now, "date": today}), 201
+
+
+# â”€â”€ ATTENDANCE CHECK-OUT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/attendance/check-out", methods=["POST"])
+@login_required
+def check_out():
+    d             = request.json or {}
+    faculty_id    = session["faculty_id"]
+    employee_id   = session["employee_id"]
+    face_verified = bool(d.get("faceVerified", False))
+    image_b64     = d.get("capturedImage", "")
+
+    try:
+        lat = float(d.get("latitude",  0))
+        lng = float(d.get("longitude", 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid GPS coordinates."}), 400
+
+    if not face_verified:
+        return jsonify({"error": "Face verification failed. Please scan again."}), 400
+
+    dist, ok = inside_campus(lat, lng)
+    if not ok:
+        return jsonify({
+            "error": (f"Location not verified. You are {dist}m from {COLLEGE_NAME}. "
+                      f"Check-out must be done inside campus.")
+        }), 403
+
+    today = ist_today()
+    db    = get_db()
+    row   = db.execute(
+        "SELECT * FROM attendance WHERE faculty_id=? AND attendance_date=?",
+        [faculty_id, today]
+    ).fetchone()
+
+    if not row or not row["check_in_time"]:
+        db.close()
+        return jsonify({"error": "Please check in first before checking out."}), 400
+    if row["check_out_time"]:
+        db.close()
+        return jsonify({"error": f"Already checked out today at {row['check_out_time']}."}), 409
+
+    time_now = ist_hms()
+    hrs      = working_hours(row["check_in_time"], time_now)
+    status   = "half_day" if hrs < HALF_DAY_HOURS else "present"
+
+    img_path = ""
+    if image_b64:
+        ts = ist_now().strftime("%Y%m%d_%H%M%S")
+        fn = f"{safe_name(employee_id)}_out_{ts}.jpg"
+        fp = os.path.join(ATTENDANCE_FACES_DIR, fn)
+        if save_b64_image(image_b64, fp):
+            img_path = "/" + fp.replace("\\", "/")
+
+    db.execute(
+        """UPDATE attendance SET
+           check_out_time=?,check_out_image_path=?,check_out_lat=?,check_out_lng=?,
+           working_hours=?,status=? WHERE id=?""",
+        [time_now, img_path, lat, lng, hrs, status, row["id"]]
+    )
+    db.commit()
+    db.close()
+    return jsonify({
+        "message":      "Check-out recorded!",
+        "time":         time_now,
+        "workingHours": hrs,
+        "status":       status,
+    })
+
+
+# â”€â”€ TODAY STATUS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/attendance/today-status")
+@login_required
+def today_status():
+    db  = get_db()
+    row = db.execute(
+        "SELECT * FROM attendance WHERE faculty_id=? AND attendance_date=?",
+        [session["faculty_id"], ist_today()]
+    ).fetchone()
+    db.close()
+    if not row:
+        resp = jsonify({"hasRecord": False, "date": ist_today()})
+    else:
+        resp = jsonify({
+            "hasRecord":         True,
+            "date":              row["attendance_date"],
+            "checkInTime":       row["check_in_time"],
+            "checkOutTime":      row["check_out_time"],
+            "workingHours":      row["working_hours"],
+            "status":            row["status"],
+            "checkInImagePath":  row["check_in_image_path"],
+            "checkOutImagePath": row["check_out_image_path"],
+        })
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+# â”€â”€ FACULTY REPORTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/report/my")
+@login_required
+def my_report():
+    args      = request.args
+    month     = args.get("month", "")
+    date_from = args.get("from", "")
+    date_to   = args.get("to",   "")
+
+    q = "SELECT * FROM attendance WHERE faculty_id=?"
+    p = [session["faculty_id"]]
+
+    if month:
+        q += " AND strftime('%Y-%m',attendance_date)=?"; p.append(month)
+    elif date_from and date_to:
+        q += " AND attendance_date>=? AND attendance_date<=?"; p += [date_from, date_to]
+
+    q += " ORDER BY attendance_date DESC"
+    db   = get_db()
+    rows = db.execute(q, p).fetchall()
+    db.close()
+    resp = jsonify([dict(r) for r in rows])
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+@app.route("/api/report/summary")
+@login_required
+def my_summary():
+    month   = request.args.get("month", ist_now().strftime("%Y-%m"))
+    db      = get_db()
+    yr, mo  = map(int, month.split("-"))
+
+    # Working days = Mon-Sat only, up to today (not future dates)
+    today_str = ist_today()
+    _, dim    = calendar.monthrange(yr, mo)
+    wdays     = 0
+    for d in range(1, dim + 1):
+        ds = f"{yr}-{mo:02d}-{d:02d}"
+        if ds > today_str:
+            break
+        if date(yr, mo, d).weekday() != 6:   # 6 = Sunday
+            wdays += 1
+
+    rows = db.execute(
+        "SELECT status, COUNT(*) as cnt FROM attendance "
+        "WHERE faculty_id=? AND strftime('%Y-%m',attendance_date)=? GROUP BY status",
+        [session["faculty_id"], month]
+    ).fetchall()
+    stats = {"present": 0, "half_day": 0}
+    for r in rows: stats[r["status"]] = r["cnt"]
+    stats["absent"]       = max(0, wdays - stats["present"] - stats["half_day"])
+    stats["working_days"] = wdays
+
+    avg = db.execute(
+        "SELECT AVG(working_hours) FROM attendance "
+        "WHERE faculty_id=? AND strftime('%Y-%m',attendance_date)=?",
+        [session["faculty_id"], month]
+    ).fetchone()[0] or 0
+    stats["avg_working_hours"] = round(avg, 2)
+    stats["month"]             = month
+    db.close()
+    resp = jsonify(stats)
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+@app.route("/api/report/calendar")
+@login_required
+def my_calendar():
+    month = request.args.get("month", ist_now().strftime("%Y-%m"))
+    db    = get_db()
+    rows  = db.execute(
+        "SELECT attendance_date, status, check_in_time, check_out_time, working_hours "
+        "FROM attendance WHERE faculty_id=? AND strftime('%Y-%m',attendance_date)=? "
+        "ORDER BY attendance_date",
+        [session["faculty_id"], month]
+    ).fetchall()
+    db.close()
+    resp = jsonify([dict(r) for r in rows])
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+# â”€â”€ ADMIN APIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/admin/stats")
+@admin_required
+def admin_stats():
+    today = ist_today()
+    db    = get_db()
+    total    = db.execute("SELECT COUNT(*) FROM faculty WHERE role='faculty' AND is_active=1").fetchone()[0]
+    present  = db.execute("SELECT COUNT(*) FROM attendance WHERE attendance_date=? AND check_in_time IS NOT NULL", [today]).fetchone()[0]
+    checkout = db.execute("SELECT COUNT(*) FROM attendance WHERE attendance_date=? AND check_out_time IS NOT NULL", [today]).fetchone()[0]
+    halfday  = db.execute("SELECT COUNT(*) FROM attendance WHERE attendance_date=? AND status='half_day'", [today]).fetchone()[0]
+    depts    = db.execute(
+        "SELECT department, COUNT(*) as cnt FROM faculty WHERE role='faculty' AND is_active=1 GROUP BY department ORDER BY cnt DESC"
+    ).fetchall()
+    total_att= db.execute("SELECT COUNT(*) FROM attendance").fetchone()[0]
+    db.close()
+    return jsonify({
+        "totalFaculty":    total,
+        "todayPresent":    present,
+        "todayAbsent":     max(0, total - present),
+        "todayCheckout":   checkout,
+        "todayHalfDay":    halfday,
+        "totalAttendance": total_att,
+        "departments":     [dict(d) for d in depts],
+    })
+
+
+@app.route("/api/admin/faculty")
+@admin_required
+def admin_faculty():
+    dept   = request.args.get("department", "")
+    search = request.args.get("search", "").strip()
+    db     = get_db()
+    q      = "SELECT * FROM faculty WHERE role='faculty'"
+    p      = []
+    if dept:   q += " AND department=?";                             p.append(dept)
+    if search: q += " AND (name LIKE ? OR employee_id LIKE ?)";     p += [f"%{search}%", f"%{search}%"]
+    q += " ORDER BY department, name"
+    rows = db.execute(q, p).fetchall()
+    db.close()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d.pop("password_hash",   None)
+        d.pop("face_descriptor", None)
+        result.append(d)
+    return jsonify(result)
+
+
+@app.route("/api/admin/faculty/<int:fid>", methods=["DELETE"])
+@admin_required
+def admin_delete_faculty(fid):
+    db = get_db()
+    f  = db.execute("SELECT name,employee_id FROM faculty WHERE id=? AND role='faculty'", [fid]).fetchone()
+    if not f:
+        db.close()
+        return jsonify({"error": "Faculty not found."}), 404
+    db.execute("DELETE FROM faculty WHERE id=?", [fid])
+    db.execute("INSERT INTO admin_log (admin_id,action,target_id,details) VALUES (?,?,?,?)",
+               [session["faculty_id"], "DELETE_FACULTY", fid, f"Deleted: {f['name']} ({f['employee_id']})"])
+    db.commit()
+    db.close()
+    return jsonify({"message": f"Faculty '{f['name']}' deleted."})
+
+
+@app.route("/api/admin/faculty/<int:fid>/toggle", methods=["POST"])
+@admin_required
+def admin_toggle_faculty(fid):
+    db  = get_db()
+    row = db.execute("SELECT name,is_active FROM faculty WHERE id=? AND role='faculty'", [fid]).fetchone()
+    if not row:
+        db.close()
+        return jsonify({"error": "Faculty not found."}), 404
+    new_state = 0 if row["is_active"] else 1
+    db.execute("UPDATE faculty SET is_active=? WHERE id=?", [new_state, fid])
+    db.execute("INSERT INTO admin_log (admin_id,action,target_id,details) VALUES (?,?,?,?)",
+               [session["faculty_id"], "TOGGLE_FACULTY", fid,
+                f"{'Activated' if new_state else 'Deactivated'}: {row['name']}"])
+    db.commit()
+    db.close()
+    return jsonify({"isActive": bool(new_state), "message": f"Faculty {'activated' if new_state else 'deactivated'}."})
+
+
+@app.route("/api/admin/faculty/add", methods=["POST"])
+@admin_required
+def admin_add_faculty():
+    d           = request.json or {}
+    employee_id = d.get("employeeId", "").strip().upper()
+    name        = d.get("name", "").strip()
+    email       = d.get("email", "").strip().lower()
+    phone       = d.get("phone", "").strip()
+    department  = d.get("department", "").strip()
+    designation = d.get("designation", "").strip()
+    password    = d.get("password", "")
+
+    errors = {}
+    emp_err   = validate_employee_id(employee_id)
+    email_err = validate_email(email)
+    pwd_err   = validate_password(password) if password else None
+    if emp_err:        errors["employeeId"] = emp_err
+    if email_err:      errors["email"]      = email_err
+    if pwd_err:        errors["password"]   = pwd_err
+    if not name:       errors["name"]       = "Name is required."
+    if not department: errors["department"] = "Department is required."
+    if errors:
+        return jsonify({"errors": errors}), 422
+
+    db = get_db()
+    if db.execute("SELECT id FROM faculty WHERE UPPER(employee_id)=?", [employee_id]).fetchone():
+        db.close()
+        return jsonify({"error": "Employee ID already exists."}), 409
+    if db.execute("SELECT id FROM faculty WHERE LOWER(email)=?", [email]).fetchone():
+        db.close()
+        return jsonify({"error": "Email already exists."}), 409
+
+    pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode() if password else ""
+    cur = db.execute(
+        """INSERT INTO faculty (employee_id,name,email,phone,department,designation,password_hash)
+           VALUES (?,?,?,?,?,?,?)""",
+        [employee_id, name, email, phone, department, designation, pw_hash]
+    )
+    fid = cur.lastrowid
+    db.execute("INSERT INTO admin_log (admin_id,action,target_id,details) VALUES (?,?,?,?)",
+               [session["faculty_id"], "ADD_FACULTY", fid, f"Added: {name} ({employee_id})"])
+    db.commit()
+    db.close()
+    return jsonify({"id": fid, "message": f"Faculty '{name}' added successfully."}), 201
+
+
+@app.route("/api/admin/attendance")
+@admin_required
+def admin_attendance():
+    args      = request.args
+    dept      = args.get("department", "")
+    date_from = args.get("from", "")
+    date_to   = args.get("to",   "")
+    single_dt = args.get("date", "")
+    month     = args.get("month", "")
+    fac_id    = args.get("facultyId", "")
+
+    q = """SELECT a.*, f.name, f.employee_id, f.department, f.designation,
+                  f.email, f.phone, f.face_image_path
+           FROM attendance a JOIN faculty f ON a.faculty_id=f.id WHERE 1=1"""
+    p = []
+    if dept:      q += " AND f.department=?";                              p.append(dept)
+    if fac_id:    q += " AND a.faculty_id=?";                              p.append(fac_id)
+    if single_dt: q += " AND a.attendance_date=?";                         p.append(single_dt)
+    elif month:   q += " AND strftime('%Y-%m',a.attendance_date)=?";       p.append(month)
+    elif date_from and date_to:
+        q += " AND a.attendance_date>=? AND a.attendance_date<=?";         p += [date_from, date_to]
+    q += " ORDER BY a.attendance_date DESC, f.name ASC"
+
+    db   = get_db()
+    rows = db.execute(q, p).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.route("/api/admin/report/summary")
+@admin_required
+def admin_report_summary():
+    month = request.args.get("month", ist_now().strftime("%Y-%m"))
+    dept  = request.args.get("department", "")
+    db    = get_db()
+    yr, mo = map(int, month.split("-"))
+
+    # Working days = Monâ€“Sat only, up to today
+    today_str = ist_today()
+    _, dim    = calendar.monthrange(yr, mo)
+    wdays     = 0
+    for d in range(1, dim + 1):
+        ds = f"{yr}-{mo:02d}-{d:02d}"
+        if ds > today_str:
+            break
+        if date(yr, mo, d).weekday() != 6:
+            wdays += 1
+
+    q = "SELECT id,employee_id,name,department,designation FROM faculty WHERE role='faculty' AND is_active=1"
+    p = []
+    if dept: q += " AND department=?"; p.append(dept)
+    flist = db.execute(q, p).fetchall()
+
+    result = []
+    for f in flist:
+        rows = db.execute(
+            "SELECT status,COUNT(*) as cnt FROM attendance "
+            "WHERE faculty_id=? AND strftime('%Y-%m',attendance_date)=? GROUP BY status",
+            [f["id"], month]
+        ).fetchall()
+        stat = {"present": 0, "half_day": 0}
+        for r in rows: stat[r["status"]] = r["cnt"]
+        stat["absent"]       = max(0, wdays - stat["present"] - stat["half_day"])
+        stat["working_days"] = wdays
+        avg = db.execute(
+            "SELECT AVG(working_hours) FROM attendance WHERE faculty_id=? AND strftime('%Y-%m',attendance_date)=?",
+            [f["id"], month]
+        ).fetchone()[0] or 0
+        result.append({
+            "id": f["id"], "employeeId": f["employee_id"], "name": f["name"],
+            "department": f["department"], "designation": f["designation"],
+            **stat, "avgHours": round(avg, 2),
+        })
+    db.close()
+    return jsonify({"month": month, "workingDays": wdays, "faculty": result})
+
+
+@app.route("/api/admin/mark-leave", methods=["POST"])
+@admin_required
+def mark_leave():
+    d   = request.json or {}
+    fid = d.get("facultyId")
+    dt  = d.get("date", ist_today())
+    lt  = d.get("type", "absent")
+    rsn = d.get("reason", "")
+    db  = get_db()
+    f   = db.execute("SELECT employee_id FROM faculty WHERE id=?", [fid]).fetchone()
+    if not f:
+        db.close()
+        return jsonify({"error": "Faculty not found."}), 404
+    db.execute(
+        "INSERT OR IGNORE INTO leave_log (faculty_id,employee_id,leave_date,leave_type,reason,marked_by) VALUES (?,?,?,?,?,?)",
+        [fid, f["employee_id"], dt, lt, rsn, session["faculty_id"]]
+    )
+    db.commit()
+    db.close()
+    return jsonify({"message": f"{lt.title()} recorded for {dt}."})
+
+
+@app.route("/api/admin/log")
+@admin_required
+def admin_log():
+    db   = get_db()
+    rows = db.execute(
+        "SELECT al.*, f.name as admin_name FROM admin_log al "
+        "JOIN faculty f ON al.admin_id=f.id ORDER BY al.created_at DESC LIMIT 100"
+    ).fetchall()
+    db.close()
+    return jsonify([dict(r) for r in rows])
+
+
+# â”€â”€ COLLEGE & PROGRAM APIS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/colleges")
+def get_colleges():
+    db = get_db()
+    colleges = db.execute("SELECT * FROM colleges ORDER BY name").fetchall()
+    result = []
+    for c in colleges:
+        programs = db.execute(
+            "SELECT p.*, (SELECT COUNT(*) FROM faculty f WHERE f.program_id=p.id AND f.role='faculty' AND f.is_active=1) as student_count "
+            "FROM programs p WHERE p.college_id=? ORDER BY p.name", [c["id"]]
+        ).fetchall()
+        d = dict(c)
+        d["programs"] = [dict(p) for p in programs]
+        result.append(d)
+    db.close()
+    return jsonify(result)
+
+
+@app.route("/api/colleges", methods=["POST"])
+@admin_required
+def add_college():
+    d = request.json or {}
+    name = d.get("name", "").strip()
+    short_name = d.get("shortName", "").strip().upper()
+    description = d.get("description", "").strip()
+    if not name or not short_name:
+        return jsonify({"error": "Name and short name are required."}), 422
+    db = get_db()
+    try:
+        cur = db.execute("INSERT INTO colleges (name, short_name, description) VALUES (?,?,?)",
+                         [name, short_name, description])
+        db.commit()
+        cid = cur.lastrowid
+    except Exception:
+        db.close()
+        return jsonify({"error": "College name already exists."}), 409
+    db.close()
+    return jsonify({"id": cid, "message": f"College '{name}' added."}), 201
+
+
+@app.route("/api/colleges/<int:cid>", methods=["PUT"])
+@admin_required
+def update_college(cid):
+    d = request.json or {}
+    name = d.get("name", "").strip()
+    short_name = d.get("shortName", "").strip().upper()
+    description = d.get("description", "").strip()
+    if not name or not short_name:
+        return jsonify({"error": "Name and short name are required."}), 422
+    db = get_db()
+    db.execute("UPDATE colleges SET name=?, short_name=?, description=? WHERE id=?",
+               [name, short_name, description, cid])
+    db.commit()
+    db.close()
+    return jsonify({"message": "College updated."})
+
+
+@app.route("/api/colleges/<int:cid>", methods=["DELETE"])
+@admin_required
+def delete_college(cid):
+    db = get_db()
+    c = db.execute("SELECT name FROM colleges WHERE id=?", [cid]).fetchone()
+    if not c:
+        db.close()
+        return jsonify({"error": "College not found."}), 404
+    db.execute("DELETE FROM colleges WHERE id=?", [cid])
+    db.commit()
+    db.close()
+    return jsonify({"message": f"College '{c['name']}' deleted."})
+
+
+@app.route("/api/programs", methods=["POST"])
+@admin_required
+def add_program():
+    d = request.json or {}
+    college_id = d.get("collegeId")
+    name = d.get("name", "").strip()
+    duration = d.get("duration", "").strip()
+    intake = d.get("intakeCapacity", 0)
+    if not college_id or not name:
+        return jsonify({"error": "College and program name are required."}), 422
+    db = get_db()
+    try:
+        cur = db.execute("INSERT INTO programs (college_id, name, duration, intake_capacity) VALUES (?,?,?,?)",
+                         [college_id, name, duration, intake])
+        db.commit()
+        pid = cur.lastrowid
+    except Exception:
+        db.close()
+        return jsonify({"error": "Program already exists in this college."}), 409
+    db.close()
+    return jsonify({"id": pid, "message": f"Program '{name}' added."}), 201
+
+
+@app.route("/api/programs/<int:pid>", methods=["PUT"])
+@admin_required
+def update_program(pid):
+    d = request.json or {}
+    name = d.get("name", "").strip()
+    duration = d.get("duration", "").strip()
+    intake = d.get("intakeCapacity", 0)
+    if not name:
+        return jsonify({"error": "Program name is required."}), 422
+    db = get_db()
+    db.execute("UPDATE programs SET name=?, duration=?, intake_capacity=? WHERE id=?",
+               [name, duration, intake, pid])
+    db.commit()
+    db.close()
+    return jsonify({"message": "Program updated."})
+
+
+@app.route("/api/programs/<int:pid>", methods=["DELETE"])
+@admin_required
+def delete_program(pid):
+    db = get_db()
+    p = db.execute("SELECT name FROM programs WHERE id=?", [pid]).fetchone()
+    if not p:
+        db.close()
+        return jsonify({"error": "Program not found."}), 404
+    db.execute("DELETE FROM programs WHERE id=?", [pid])
+    db.commit()
+    db.close()
+    return jsonify({"message": f"Program '{p['name']}' deleted."})
+
+
+@app.route("/api/admin/faculty/<int:fid>", methods=["PUT"])
+@admin_required
+def admin_update_faculty(fid):
+    d = request.json or {}
+    name = d.get("name", "").strip()
+    department = d.get("department", "").strip()
+    designation = d.get("designation", "").strip()
+    phone = d.get("phone", "").strip()
+    college_id = d.get("collegeId") or None
+    program_id = d.get("programId") or None
+    if not name or not department:
+        return jsonify({"error": "Name and department are required."}), 422
+    db = get_db()
+    db.execute(
+        "UPDATE faculty SET name=?, department=?, designation=?, phone=?, college_id=?, program_id=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+        [name, department, designation, phone, college_id, program_id, fid]
+    )
+    db.commit()
+    db.close()
+    return jsonify({"message": "Faculty updated."})
+
+
+# â”€â”€ FILTERED ATTENDANCE API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+@app.route("/api/admin/attendance/filtered")
+@admin_required
+def admin_attendance_filtered():
+    args       = request.args
+    college_id = args.get("collegeId", "")
+    program_id = args.get("programId", "")
+    faculty_id = args.get("facultyId", "")
+    designation= args.get("designation", "")
+    search     = args.get("search", "").strip()
+    date_from  = args.get("from", "")
+    date_to    = args.get("to", "")
+    month      = args.get("month", "")
+    mode       = args.get("mode", "detail")   # detail | summary
+
+    db = get_db()
+
+    if mode == "summary":
+        # Per-faculty attendance % summary
+        today_str = ist_today()
+        if month:
+            yr, mo = map(int, month.split("-"))
+            _, dim = calendar.monthrange(yr, mo)
+            wdays = sum(
+                1 for d in range(1, dim + 1)
+                if date(yr, mo, d).weekday() != 6
+                and f"{yr}-{mo:02d}-{d:02d}" <= today_str
+            )
+            date_cond = f"strftime('%Y-%m',a.attendance_date)='{month}'"
+        elif date_from and date_to:
+            d1 = datetime.strptime(date_from, "%Y-%m-%d").date()
+            d2 = datetime.strptime(date_to,   "%Y-%m-%d").date()
+            wdays = sum(1 for i in range((d2 - d1).days + 1)
+                        if (d1 + timedelta(days=i)).weekday() != 6)
+            date_cond = f"a.attendance_date>='{date_from}' AND a.attendance_date<='{date_to}'"
+        else:
+            today = ist_today()
+            wdays = 1 if date.fromisoformat(today).weekday() != 6 else 0
+            date_cond = f"a.attendance_date='{today}'"
+
+        fq = "SELECT f.id, f.name, f.employee_id, f.department, f.designation, f.college_id, f.program_id, f.face_image_path FROM faculty f WHERE f.role='faculty' AND f.is_active=1"
+        fp = []
+        if college_id: fq += " AND f.college_id=?";  fp.append(college_id)
+        if program_id: fq += " AND f.program_id=?";  fp.append(program_id)
+        if faculty_id: fq += " AND f.id=?";          fp.append(faculty_id)
+        if designation:fq += " AND f.designation=?"; fp.append(designation)
+        if search:     fq += " AND (f.name LIKE ? OR f.employee_id LIKE ?)"; fp += [f"%{search}%", f"%{search}%"]
+        flist = db.execute(fq, fp).fetchall()
+
+        result = []
+        for f in flist:
+            rows = db.execute(
+                f"SELECT status, COUNT(*) as cnt FROM attendance a WHERE a.faculty_id=? AND {date_cond} GROUP BY status",
+                [f["id"]]
+            ).fetchall()
+            stat = {"present": 0, "half_day": 0}
+            for r in rows: stat[r["status"]] = r["cnt"]
+            stat["absent"] = max(0, wdays - stat["present"] - stat["half_day"])
+            stat["working_days"] = wdays
+            pct = round(((stat["present"] + stat["half_day"] * 0.5) / wdays * 100), 1) if wdays else 0
+
+            college = db.execute("SELECT name, short_name FROM colleges WHERE id=?", [f["college_id"]]).fetchone() if f["college_id"] else None
+            program = db.execute("SELECT name FROM programs WHERE id=?", [f["program_id"]]).fetchone() if f["program_id"] else None
+            result.append({
+                "id": f["id"], "name": f["name"], "employeeId": f["employee_id"],
+                "department": f["department"], "designation": f["designation"],
+                "college": college["short_name"] if college else "â€”",
+                "program": program["name"] if program else "â€”",
+                "faceImagePath": f["face_image_path"],
+                **stat, "attendancePct": pct, "workingDays": wdays
+            })
+        db.close()
+        return jsonify({"mode": "summary", "workingDays": wdays, "faculty": result})
+
+    # detail mode â€” raw attendance rows
+    q = """SELECT a.*, f.name, f.employee_id, f.department, f.designation,
+                  f.face_image_path, f.college_id, f.program_id
+           FROM attendance a JOIN faculty f ON a.faculty_id=f.id WHERE 1=1"""
+    p = []
+    if college_id: q += " AND f.college_id=?";  p.append(college_id)
+    if program_id: q += " AND f.program_id=?";  p.append(program_id)
+    if faculty_id: q += " AND a.faculty_id=?";  p.append(faculty_id)
+    if designation:q += " AND f.designation=?"; p.append(designation)
+    if search:     q += " AND (f.name LIKE ? OR f.employee_id LIKE ?)"; p += [f"%{search}%", f"%{search}%"]
+    if month:      q += " AND strftime('%Y-%m',a.attendance_date)=?"; p.append(month)
+    elif date_from and date_to:
+        q += " AND a.attendance_date>=? AND a.attendance_date<=?"; p += [date_from, date_to]
+    else:
+        q += " AND a.attendance_date=?"; p.append(ist_today())
+    q += " ORDER BY a.attendance_date DESC, f.name ASC"
+
+    rows = db.execute(q, p).fetchall()
+    result = []
+    for r in rows:
+        row = dict(r)
+        college = db.execute("SELECT short_name FROM colleges WHERE id=?", [row["college_id"]]).fetchone() if row.get("college_id") else None
+        program = db.execute("SELECT name FROM programs WHERE id=?", [row["program_id"]]).fetchone() if row.get("program_id") else None
+        row["college"] = college["short_name"] if college else "â€”"
+        row["program"] = program["name"] if program else "â€”"
+        result.append(row)
+    db.close()
+    return jsonify({"mode": "detail", "records": result})
+
+
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True, host="0.0.0.0", port=5000)

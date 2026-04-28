@@ -1,0 +1,4 @@
+flask>=3.0.0
+bcrypt>=4.0.0
+pytz>=2024.1
+mysql-connector-python>=8.3.0

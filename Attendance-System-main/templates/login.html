@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Login — CDGI Attendance{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-primary to-blue-800 flex items-center justify-center py-12 px-4">
+<div class="w-full max-w-md">
+  <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+    <div class="bg-primary p-8 text-white text-center">
+      <div class="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-3">
+        <i class="fas fa-user-shield text-primary text-2xl"></i>
+      </div>
+      <h1 class="text-2xl font-black font-raleway">Faculty Login</h1>
+      <p class="text-blue-200 text-sm mt-1">Chameli Devi Group of Institutions</p>
+    </div>
+
+    <div class="p-8">
+      <div id="err" class="hidden alert alert-error mb-5 text-sm"></div>
+
+      <!--
+        We use a real <form> so browsers offer to save Employee ID + Password.
+        autocomplete="username" on empId → browser saves it under "username" field.
+        Email autocomplete is disabled site-wide via autocomplete="off" on that field.
+        The form never actually submits (onsubmit=false); doLogin() handles fetch.
+      -->
+      <form autocomplete="on" onsubmit="return false">
+        <div class="space-y-5">
+          <div>
+            <label class="lbl">Employee ID</label>
+            <input id="empId" name="username" type="text" class="inp"
+                   placeholder="e.g. EMP001"
+                   autocomplete="username"
+                   oninput="this.value=this.value.toUpperCase()">
+          </div>
+          <div>
+            <label class="lbl">Password</label>
+            <div class="relative">
+              <input id="pwd" name="password" type="password" class="inp pr-10"
+                     placeholder="Enter your password"
+                     autocomplete="current-password">
+              <button type="button" onclick="togglePwd()"
+                      class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <i id="pwdIcon" class="fas fa-eye text-sm"></i>
+              </button>
+            </div>
+          </div>
+          <!-- Submit button is type=submit so browser's password manager fires -->
+          <button type="submit" onclick="doLogin()" id="loginBtn"
+                  class="btn btn-primary w-full justify-center py-3">
+            <i class="fas fa-sign-in-alt"></i> Login
+          </button>
+        </div>
+      </form>
+
+      <p class="text-center text-sm text-gray-500 mt-6">
+        New faculty? <a href="/register" class="text-primary font-bold hover:text-accent">Register here</a>
+      </p>
+    </div>
+  </div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function togglePwd() {
+  const i = document.getElementById("pwd");
+  const ic = document.getElementById("pwdIcon");
+  i.type = i.type === "password" ? "text" : "password";
+  ic.className = i.type === "password" ? "fas fa-eye text-sm" : "fas fa-eye-slash text-sm";
+}
+
+async function doLogin() {
+  const btn = document.getElementById("loginBtn");
+  const err = document.getElementById("err");
+  const emp = document.getElementById("empId").value.trim().toUpperCase();
+  const pwd = document.getElementById("pwd").value;
+  err.classList.add("hidden");
+
+  if (!emp || !pwd) {
+    err.textContent = "Please enter Employee ID and Password.";
+    err.classList.remove("hidden"); return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging in…';
+
+  try {
+    const res  = await fetch("/api/auth/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employeeId: emp, password: pwd })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    window.location.replace(data.role === "admin" ? "/admin" : "/dashboard");
+  } catch (e) {
+    err.textContent = e.message;
+    err.classList.remove("hidden");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Login';
+  }
+}
+</script>
+{% endblock %}

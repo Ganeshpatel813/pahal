@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Home — CDGI Faculty Attendance{% endblock %}
+{% block content %}
+<section class="relative text-white py-40 px-4 overflow-hidden" style="min-height:580px">
+  <!-- CDGI campus blurred background — tries campus photo, falls back to gradient -->
+  <div class="absolute inset-0 z-0">
+    <img src="{{ url_for('static', filename='images/cdgi_campus.jpg') }}"
+         alt="CDGI Campus"
+         class="w-full h-full object-cover"
+         style="filter:blur(4px) brightness(0.35) saturate(0.6); transform:scale(1.06);"
+         onerror="this.style.display='none'">
+    <div class="absolute inset-0"
+         style="background:linear-gradient(135deg,rgba(30,58,95,0.92) 0%,rgba(15,30,70,0.88) 60%,rgba(30,58,95,0.85) 100%)"></div>
+  </div>
+
+  <div class="relative z-10 max-w-6xl mx-auto text-center">
+    <div class="w-20 h-20 bg-accent rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
+      <i class="fas fa-fingerprint text-primary text-4xl"></i>
+    </div>
+    <h1 class="text-4xl md:text-5xl font-black text-white mb-4 font-raleway">Smart Faculty Attendance</h1>
+    <p class="text-blue-200 text-lg mb-8 max-w-2xl mx-auto">
+      AI face recognition + GPS campus lock. Mark attendance only from inside
+      <strong class="text-accent">Chameli Devi Group of Institutions, Indore</strong>.
+    </p>
+    <div class="flex flex-wrap gap-4 justify-center">
+      <a href="/login"    class="btn btn-accent btn-lg">Faculty Login</a>
+      <a href="/register" class="btn btn-lg" style="background:rgba(255,255,255,.15);color:white;border:1.5px solid rgba(255,255,255,.3)">Register</a>
+    </div>
+  </div>
+</section>
+
+<section class="py-16 px-4 max-w-4xl mx-auto">
+  <h2 class="text-3xl font-black text-primary text-center mb-10 font-raleway">Key Features</h2>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="card text-center">
+      <div class="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-face-smile text-primary text-2xl"></i></div>
+      <h3 class="font-black text-primary text-lg mb-2">AI Face Recognition</h3>
+      <p class="text-gray-500 text-sm">128-point neural face descriptor matching. Only your registered face can mark your attendance.</p>
+    </div>
+    <div class="card text-center">
+      <div class="w-14 h-14 bg-green-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-map-marker-alt text-green-600 text-2xl"></i></div>
+      <h3 class="font-black text-primary text-lg mb-2">Campus-Only Access</h3>
+      <p class="text-gray-500 text-sm">GPS-verified attendance. Chameli Devi Group of Institutions. Location verified on every scan.</p>
+    </div>
+    <div class="card text-center">
+      <div class="w-14 h-14 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-chart-bar text-yellow-600 text-2xl"></i></div>
+      <h3 class="font-black text-primary text-lg mb-2">Detailed Reports</h3>
+      <p class="text-gray-500 text-sm">In-time, out-time, working hours, present/absent/half-day. CSV export for admin &amp; faculty.</p>
+    </div>
+    <div class="card text-center">
+      <div class="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><i class="fas fa-clock text-purple-600 text-2xl"></i></div>
+      <h3 class="font-black text-primary text-lg mb-2">Check-In &amp; Check-Out</h3>
+      <p class="text-gray-500 text-sm">Track arrival &amp; departure. Working hours computed automatically. Half-day auto-detected (&lt;4 hrs).</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+{% block title %}Register — CDGI Attendance{% endblock %}
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-10 px-4">
+<div class="max-w-2xl mx-auto">
+<div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+  <div class="bg-primary p-7 text-white">
+    <h1 class="text-2xl font-black font-raleway">Faculty Registration</h1>
+    <p class="text-blue-200 text-sm mt-1">Chameli Devi Group of Institutions</p>
+  </div>
+
+  <!-- Step tabs -->
+  <div class="flex border-b border-gray-100">
+    <div id="tab1" class="step-tab flex-1 active"><i class="fas fa-user mr-1"></i>1. Personal Info</div>
+    <div id="tab2" class="step-tab flex-1"><i class="fas fa-camera mr-1"></i>2. Face Registration</div>
+  </div>
+
+  <div class="p-8">
+    <div id="globalErr" class="hidden alert alert-error mb-5"></div>
+    <div id="globalOk"  class="hidden alert alert-success mb-5"></div>
+
+    <!-- ── STEP 1 ── -->
+    <div id="step1">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+        <div class="md:col-span-2">
+          <label class="lbl">Full Name *</label>
+          <input id="f-name" class="inp" type="text" placeholder="Dr. John Smith"
+                 autocomplete="off" oninput="liveValidate('name',this.value)">
+          <p id="e-name" class="field-error hidden"></p>
+        </div>
+
+        <div>
+          <label class="lbl">Employee ID * <span class="text-gray-400 font-normal normal-case">(UPPERCASE letters/digits only)</span></label>
+          <input id="f-empid" class="inp" type="text" placeholder="EMP001"
+                 autocomplete="off"
+                 oninput="this.value=this.value.toUpperCase();liveValidate('empid',this.value)"
+                 onblur="checkEmpIdAvailability('f-empid','e-empid')">
+          <p id="e-empid" class="field-error hidden"></p>
+          <p class="field-hint">3–15 uppercase letters/digits. E.g. EMP001, CSE2025</p>
+        </div>
+
+        <div>
+          <label class="lbl">Email Address * </label>
+          <!-- autocomplete="off" so email is NOT autofilled from browser -->
+          <input id="f-email" class="inp" type="text" placeholder="john.smith@cdgi.edu.in"
+                 autocomplete="off" oninput="liveValidate('email',this.value)">
+          <p id="e-email" class="field-error hidden"></p>
+        </div>
+
+        <div>
+          <label class="lbl">Phone Number <span class="text-gray-400 font-normal normal-case">(optional)</span></label>
+          <input id="f-phone" class="inp" type="tel" placeholder="9876543210"
+                 autocomplete="off" oninput="liveValidate('phone',this.value)" maxlength="10">
+          <p id="e-phone" class="field-error hidden"></p>
+          <p class="field-hint">10-digit Indian mobile starting with 6–9.</p>
+        </div>
+
+        <div>
+          <label class="lbl">College *</label>
+          <select id="f-college" class="inp" onchange="onCollegeChange();liveValidate('college',this.value)">
+            <option value="">— Select College —</option>
+          </select>
+          <p id="e-college" class="field-error hidden"></p>
+        </div>
+
+        <div>
+          <label class="lbl">Department *</label>
+          <select id="f-program" class="inp" onchange="liveValidate('program',this.value)" disabled>
+            <option value="">— Select College First —</option>
+          </select>
+          <p id="e-program" class="field-error hidden"></p>
+        </div>
+
+        <div>
+          <label class="lbl">Designation *</label>
+          <input id="f-desig" class="inp" type="text" placeholder="Assistant Professor"
+                 autocomplete="off" oninput="liveValidate('desig',this.value)">
+          <p id="e-desig" class="field-error hidden"></p>
+        </div>
+
+        <div>
+          <label class="lbl">Password * <span class="text-gray-400 font-normal normal-case">(min 8 chars, 1 uppercase, 1 digit)</span></label>
+          <div class="relative">
+            <input id="f-pwd" class="inp pr-9" type="password" placeholder="Create strong password"
+                   autocomplete="new-password" oninput="liveValidate('pwd',this.value)">
+            <button type="button" onclick="tPwd('f-pwd','pi1')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <i id="pi1" class="fas fa-eye text-sm"></i>
+            </button>
+          </div>
+          <p id="e-pwd" class="field-error hidden"></p>
+          <div id="pwd-strength" class="mt-2 hidden">
+            <div class="progress h-1.5"><div id="pwd-bar" class="progress-bar" style="width:0%;height:6px"></div></div>
+            <p id="pwd-label" class="text-xs mt-1"></p>
+          </div>
+        </div>
+
+        <div>
+          <label class="lbl">Confirm Password *</label>
+          <div class="relative">
+            <input id="f-cpwd" class="inp pr-9" type="password" placeholder="Re-enter password"
+                   autocomplete="new-password" oninput="liveValidate('cpwd',this.value)">
+            <button type="button" onclick="tPwd('f-cpwd','pi2')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <i id="pi2" class="fas fa-eye text-sm"></i>
+            </button>
+          </div>
+          <p id="e-cpwd" class="field-error hidden"></p>
+        </div>
+
+      </div><!-- /grid -->
+
+      <button onclick="goStep2()" class="btn btn-primary mt-7 px-8">
+        Next: Face Registration <i class="fas fa-arrow-right ml-1"></i>
+      </button>
+    </div><!-- /step1 -->
+
+    <!-- ── STEP 2 ── -->
+    <div id="step2" class="hidden">
+      <p class="alert alert-info text-sm mb-5">
+        <i class="fas fa-info-circle mr-1"></i>
+        Your face will be used for attendance verification. Ensure good lighting and look directly at the camera.
+      </p>
+      <div id="face-wrap"></div>
+
+      <div id="face-done" class="hidden mt-5 p-4 bg-green-50 rounded-xl border border-green-200">
+        <div class="flex items-center gap-4">
+          <img id="captured-img" src="" class="w-20 h-20 rounded-xl object-cover border-2 border-accent shadow">
+          <div>
+            <p class="font-bold text-green-700"><i class="fas fa-check-circle mr-1"></i> Face Captured Successfully</p>
+            <p class="text-gray-500 text-xs mt-1">Your face has been scanned and is ready for registration.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-3 mt-6">
+        <button onclick="goBack()" class="btn btn-ghost">
+          <i class="fas fa-arrow-left"></i> Back
+        </button>
+        <button id="submitBtn" onclick="submitReg()" disabled class="btn btn-success flex-1 justify-center opacity-50">
+          <i class="fas fa-user-check"></i> Complete Registration
+        </button>
+      </div>
+    </div><!-- /step2 -->
+
+  </div>
+</div>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/face-api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/face-scanner.js') }}"></script>
+<script>
+let faceData = null;
+let formData = {};
+let collegesData = [];
+
+const EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+const PHONE_RE = /^[6-9]\d{9}$/;
+const EMP_RE   = /^[A-Z0-9]{3,15}$/;
+
+/* ── Real-time Employee ID availability check ── */
+let _empIdTimer = null;
+async function checkEmpIdAvailability(inputId, errId) {
+  const val = document.getElementById(inputId).value.trim().toUpperCase();
+  if (!EMP_RE.test(val)) return; // format error already shown by liveValidate
+  clearTimeout(_empIdTimer);
+  _empIdTimer = setTimeout(async () => {
+    try {
+      const res  = await fetch(`/api/auth/check-empid?id=${encodeURIComponent(val)}`);
+      const data = await res.json();
+      const errEl = document.getElementById(errId);
+      const inp   = document.getElementById(inputId);
+      if (!data.available) {
+        errEl.textContent = data.message;
+        errEl.classList.remove("hidden");
+        inp.classList.add("error");
+        inp.classList.remove("valid");
+      } else {
+        // Show green available message briefly
+        errEl.textContent = data.message;
+        errEl.classList.remove("hidden");
+        errEl.style.color = "#16a34a";
+        inp.classList.remove("error");
+        inp.classList.add("valid");
+        setTimeout(() => {
+          errEl.classList.add("hidden");
+          errEl.style.color = "";
+        }, 2500);
+      }
+    } catch(e) { /* network error — ignore, server will validate on submit */ }
+  }, 400);
+}
+
+/* ── Load colleges from API ── */
+async function loadColleges() {
+  try {
+    const res = await fetch("/api/colleges");
+    collegesData = await res.json();
+    const sel = document.getElementById("f-college");
+    sel.innerHTML = '<option value="">— Select College —</option>' +
+      collegesData.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+  } catch(e) {
+    console.error("Failed to load colleges", e);
+  }
+}
+
+function onCollegeChange() {
+  const cid = document.getElementById("f-college").value;
+  const progSel = document.getElementById("f-program");
+  const college = collegesData.find(c => c.id == cid);
+  if (college && college.programs && college.programs.length) {
+    progSel.innerHTML = '<option value="">— Select Program —</option>' +
+      college.programs.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+    progSel.disabled = false;
+  } else {
+    progSel.innerHTML = '<option value="">— Select College First —</option>';
+    progSel.disabled = true;
+  }
+  liveValidate("college", cid);
+}
+
+loadColleges();
+
+function showErr(id, msg) {
+  const el = document.getElementById("e-" + id);
+  if (el) { el.textContent = msg; el.classList.toggle("hidden", !msg); }
+  const fid = {name:"f-name",empid:"f-empid",email:"f-email",phone:"f-phone",college:"f-college",program:"f-program",dept:"f-dept",desig:"f-desig",pwd:"f-pwd",cpwd:"f-cpwd"}[id];
+  if (fid) {
+    const el2 = document.getElementById(fid);
+    if (el2) { el2.classList.toggle("error", !!msg); el2.classList.toggle("valid", !msg && el2.value.trim()); }
+  }
+}
+
+function liveValidate(field, val) {
+  switch (field) {
+    case "name":  showErr("name", val.trim().length < 2 ? "Full name must be at least 2 characters." : ""); break;
+    case "empid": showErr("empid", !EMP_RE.test(val.trim()) ? `Employee ID must be 3–15 uppercase letters/digits. '${val}' is invalid.` : ""); break;
+    case "email": showErr("email", !EMAIL_RE.test(val.trim()) ? "Invalid email address. Use format: name@domain.com" : ""); break;
+    case "phone": if (val.trim()) showErr("phone", !PHONE_RE.test(val.trim()) ? "Enter a valid 10-digit Indian mobile (starts with 6–9)." : ""); else showErr("phone",""); break;
+    case "college": showErr("college", !val ? "Please select a college." : ""); break;
+    case "program": showErr("program", !val ? "Please select a department." : ""); break;
+    case "desig": showErr("desig", val.trim().length < 2 ? "Designation is required." : ""); break;
+    case "pwd":
+      pwdStrength(val);
+      if (val.length < 8) { showErr("pwd","Password must be at least 8 characters."); break; }
+      if (!/[A-Z]/.test(val)) { showErr("pwd","Must contain at least one uppercase letter."); break; }
+      if (!/[0-9]/.test(val)) { showErr("pwd","Must contain at least one digit."); break; }
+      showErr("pwd",""); break;
+    case "cpwd": showErr("cpwd", val !== document.getElementById("f-pwd").value ? "Passwords do not match." : ""); break;
+  }
+}
+
+function pwdStrength(pwd) {
+  const wrap=document.getElementById("pwd-strength"),bar=document.getElementById("pwd-bar"),lbl=document.getElementById("pwd-label");
+  wrap.classList.remove("hidden");
+  let score=0;
+  if(pwd.length>=8) score++; if(/[A-Z]/.test(pwd)) score++; if(/[0-9]/.test(pwd)) score++; if(/[^A-Za-z0-9]/.test(pwd)) score++;
+  const c=["#dc2626","#f97316","#eab308","#16a34a"],l=["Weak","Fair","Good","Strong"];
+  bar.style.width=(score*25)+"%"; bar.style.background=c[score-1]||"#dc2626";
+  lbl.textContent=pwd?(l[score-1]||"Very Weak"):""; lbl.style.color=c[score-1]||"#dc2626";
+}
+
+function tPwd(inputId, iconId) {
+  const i=document.getElementById(inputId),ic=document.getElementById(iconId);
+  i.type=i.type==="password"?"text":"password";
+  ic.className=i.type==="password"?"fas fa-eye text-sm":"fas fa-eye-slash text-sm";
+}
+
+function goStep2() {
+  const name    = document.getElementById("f-name").value.trim();
+  const empid   = document.getElementById("f-empid").value.trim().toUpperCase();
+  const email   = document.getElementById("f-email").value.trim().toLowerCase();
+  const phone   = document.getElementById("f-phone").value.trim();
+  const college = document.getElementById("f-college").value;
+  const program = document.getElementById("f-program").value;
+  const desig   = document.getElementById("f-desig").value.trim();
+  const pwd     = document.getElementById("f-pwd").value;
+  const cpwd    = document.getElementById("f-cpwd").value;
+
+  liveValidate("name",name); liveValidate("empid",empid); liveValidate("email",email);
+  liveValidate("phone",phone); liveValidate("college",college); liveValidate("program",program);
+  liveValidate("desig",desig); liveValidate("pwd",pwd); liveValidate("cpwd",cpwd);
+
+  const hasErr=["name","empid","email","phone","college","program","desig","pwd","cpwd"].some(f=>!document.getElementById("e-"+f)?.classList.contains("hidden"));
+  if(hasErr){
+    document.getElementById("globalErr").textContent="Please fix the errors above before proceeding.";
+    document.getElementById("globalErr").classList.remove("hidden"); return;
+  }
+  document.getElementById("globalErr").classList.add("hidden");
+
+  // Use selected program name as department
+  const progSel = document.getElementById("f-program");
+  const dept = progSel.options[progSel.selectedIndex]?.text || "";
+
+  formData = { name, employeeId:empid, email, phone, department:dept, designation:desig,
+               password:pwd, collegeId:parseInt(college), programId:parseInt(program) };
+  document.getElementById("step1").classList.add("hidden");
+  document.getElementById("step2").classList.remove("hidden");
+  document.getElementById("tab1").classList.remove("active");
+  document.getElementById("tab2").classList.add("active");
+  initFaceScanner("face-wrap",(descriptor,imageB64)=>{
+    faceData={descriptor,image:imageB64};
+    document.getElementById("captured-img").src=imageB64;
+    document.getElementById("face-done").classList.remove("hidden");
+    const sb=document.getElementById("submitBtn");
+    sb.disabled=false; sb.classList.remove("opacity-50");
+  });
+}
+
+function goBack() {
+  stopFaceScanner();
+  document.getElementById("step2").classList.add("hidden");
+  document.getElementById("step1").classList.remove("hidden");
+  document.getElementById("tab1").classList.add("active");
+  document.getElementById("tab2").classList.remove("active");
+}
+
+async function submitReg() {
+  if(!faceData) return;
+  const btn=document.getElementById("submitBtn");
+  const gErr=document.getElementById("globalErr");
+  const gOk=document.getElementById("globalOk");
+  gErr.classList.add("hidden"); gOk.classList.add("hidden");
+  btn.disabled=true;
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Registering…';
+  try {
+    const res=await fetch("/api/auth/register",{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({...formData,faceDescriptor:faceData.descriptor,faceImage:faceData.image})
+    });
+    const data=await res.json();
+    if(!res.ok){
+      if(data.errors){
+        const fieldMap={name:"name",employeeId:"empid",email:"email",phone:"phone",department:"dept",designation:"desig",password:"pwd",face:"empid"};
+        Object.entries(data.errors).forEach(([k,v])=>showErr(fieldMap[k]||"empid",v));
+        gErr.textContent="Please fix the errors and try again.";
+      } else { gErr.textContent=data.error||"Registration failed."; }
+      gErr.classList.remove("hidden");
+      btn.disabled=false; btn.innerHTML='<i class="fas fa-user-check"></i> Complete Registration';
+      return;
+    }
+    gOk.innerHTML="<i class='fas fa-check-circle mr-1'></i> Registration successful! Redirecting to login…";
+    gOk.classList.remove("hidden");
+    setTimeout(()=>window.location.replace("/login"),2000);
+  } catch(e) {
+    gErr.textContent="Server error: "+e.message;
+    gErr.classList.remove("hidden");
+    btn.disabled=false; btn.innerHTML='<i class="fas fa-user-check"></i> Complete Registration';
+  }
+}
+</script>
+{% endblock %}

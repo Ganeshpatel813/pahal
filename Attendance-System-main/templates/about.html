@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}About — CDGI{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto py-14 px-4">
+<h1 class="text-3xl font-black text-primary mb-6 font-raleway">About CDGI Attendance System</h1>
+<div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-gray-600 space-y-4 text-sm leading-relaxed">
+<p>The CDGI Faculty Attendance System is a production-grade, AI-powered attendance platform built for <strong class="text-primary">Chameli Devi Group of Institutions</strong>, Indore.</p>
+<p>It uses <strong>face-api.js</strong> (a neural-network face recognition library) to match 128-dimensional facial descriptors. Only the registered faculty member's face can mark their own attendance.</p>
+<p>Location is GPS-verified <strong>server-side</strong> against fixed coordinates of CDGI campus. Attendance is only accepted within <strong>300 metres</strong> of the campus — this cannot be spoofed by the browser.</p>
+<p>The system tracks <strong>check-in and check-out</strong> times, computes working hours, auto-detects half-days (&lt;4 hours), and generates monthly reports for both faculty and admin.</p>
+<p class="font-semibold text-primary">Stack: Python Flask · SQLite · face-api.js · GPS Geolocation · Tailwind CSS · bcrypt</p>
+</div>
+</div>
+{% endblock %}

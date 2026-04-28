@@ -1,0 +1,1484 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard — CDGI{% endblock %}
+{% block content %}
+<div class="flex h-screen overflow-hidden" style="margin-top:-1px">
+
+<!-- ── Sidebar ─────────────────────────────────────────── -->
+<aside class="w-60 bg-primary text-white flex flex-col shadow-xl flex-shrink-0">
+  <div class="p-4 border-b border-blue-800 flex items-center gap-3">
+    <div class="w-10 h-10 rounded-xl bg-red-500 flex items-center justify-center shadow flex-shrink-0">
+      <i class="fas fa-crown text-white text-sm"></i>
+    </div>
+    <div><p class="font-black text-sm">Admin Panel</p><p class="text-blue-300 text-xs">CDGI Attendance</p></div>
+  </div>
+  <nav class="flex-1 p-3 space-y-1 overflow-y-auto">
+    <button onclick="show('overview')"  class="sb-btn active" data-s="overview"><i class="fas fa-tachometer-alt w-4"></i>Dashboard</button>
+    <button onclick="show('today')"     class="sb-btn" data-s="today"><i class="fas fa-calendar-day w-4"></i>Today's Attendance</button>
+    <button onclick="show('faculty')"   class="sb-btn" data-s="faculty"><i class="fas fa-users w-4"></i>All Faculty</button>
+    <button onclick="show('add')"       class="sb-btn" data-s="add"><i class="fas fa-user-plus w-4"></i>Add Faculty</button>
+    <button onclick="show('records')"   class="sb-btn" data-s="records"><i class="fas fa-calendar-check w-4"></i>Attendance Records</button>
+    <button onclick="show('reports')"   class="sb-btn" data-s="reports"><i class="fas fa-chart-pie w-4"></i>Monthly Reports</button>
+    <div class="pt-2 pb-1"><p class="text-blue-400 text-xs font-bold uppercase px-2">Management</p></div>
+    <button onclick="show('colleges')"  class="sb-btn" data-s="colleges"><i class="fas fa-university w-4"></i>Colleges</button>
+    <button onclick="show('programs')"  class="sb-btn" data-s="programs"><i class="fas fa-book w-4"></i>Programs</button>
+    <button onclick="show('fac-mgmt')" class="sb-btn" data-s="fac-mgmt"><i class="fas fa-chalkboard-teacher w-4"></i>Faculty Mgmt</button>
+    <button onclick="show('att-filter')" class="sb-btn" data-s="att-filter"><i class="fas fa-filter w-4"></i>Attendance Filter</button>
+  </nav>
+  <div class="p-3 border-t border-blue-800">
+    <a href="/logout" class="sb-btn text-red-400 hover:text-red-300"><i class="fas fa-sign-out-alt w-4"></i>Logout</a>
+  </div>
+</aside>
+
+<!-- ── Main area ─────────────────────────────────────────── -->
+<div class="flex-1 flex flex-col overflow-hidden">
+  <header class="bg-white shadow-sm px-6 py-3 flex items-center justify-between flex-shrink-0 border-b border-gray-100">
+    <div>
+      <h1 id="pg-title" class="text-lg font-black text-primary font-raleway">Dashboard Overview</h1>
+      <p id="pg-date"  class="text-gray-400 text-xs"></p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="live-t" class="font-mono text-primary font-bold text-sm bg-blue-50 px-3 py-1 rounded-lg border border-blue-100"></div>
+      <span class="badge badge-admin">👑 Admin Mode</span>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-y-auto p-6 bg-gray-50">
+
+    <!-- ── OVERVIEW ── -->
+    <div id="sec-overview" class="sec-content space-y-5">
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div class="stat-card blue"><p class="text-xs text-gray-500 font-semibold uppercase">Total Faculty</p><p id="st-total" class="text-3xl font-black text-blue-700 mt-1">—</p></div>
+        <div class="stat-card green"><p class="text-xs text-gray-500 font-semibold uppercase">Today Present</p><p id="st-pres" class="text-3xl font-black text-green-700 mt-1">—</p></div>
+        <div class="stat-card red"><p class="text-xs text-gray-500 font-semibold uppercase">Today Absent</p><p id="st-abs" class="text-3xl font-black text-red-600 mt-1">—</p></div>
+        <div class="stat-card"><p class="text-xs text-gray-500 font-semibold uppercase">Checked Out</p><p id="st-co" class="text-3xl font-black text-yellow-700 mt-1">—</p></div>
+        <div class="stat-card orange"><p class="text-xs text-gray-500 font-semibold uppercase">Half Day</p><p id="st-hd" class="text-3xl font-black text-orange-600 mt-1">—</p></div>
+      </div>
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-primary text-sm mb-4">Department Breakdown</h3>
+        <div id="dept-bars" class="space-y-2"></div>
+      </div>
+    </div>
+
+    <!-- ── TODAY ── -->
+    <div id="sec-today" class="sec-content hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <h3 class="font-bold text-primary text-sm flex-1">Today's Attendance</h3>
+          <input type="date" id="td-date" class="inp text-xs" style="width:150px" onchange="loadToday()">
+          <select id="td-dept" class="inp text-xs" style="width:180px" onchange="loadToday()"><option value="">All Departments</option></select>
+          <button onclick="dlCSV(todayData,'today_attendance')" class="btn btn-ghost btn-sm"><i class="fas fa-download"></i> CSV</button>
+        </div>
+        <div class="tbl-wrap"><table class="data-tbl"><thead><tr>
+          <th>#</th><th>Reg. Photo</th><th>In Photo</th><th>Out Photo</th>
+          <th>Name &amp; ID</th><th>Department</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th>
+        </tr></thead><tbody id="today-tb"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ── ALL FACULTY ── -->
+    <div id="sec-faculty" class="sec-content hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <h3 class="font-bold text-primary text-sm flex-1">Registered Faculty</h3>
+          <input id="fac-search" class="inp text-xs" style="width:180px" placeholder="Search name / ID…" oninput="loadFaculty()">
+          <select id="fac-dept" class="inp text-xs" style="width:200px" onchange="loadFaculty()"><option value="">All Departments</option></select>
+        </div>
+        <div class="tbl-wrap"><table class="data-tbl"><thead><tr>
+          <th>#</th><th>Photo</th><th>Name</th><th>Emp. ID</th><th>Department</th>
+          <th>Designation</th><th>Email</th><th>Phone</th><th>Face Reg.</th><th>Status</th><th>Joined</th><th>Actions</th>
+        </tr></thead><tbody id="fac-tb"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ── ADD FACULTY ── -->
+    <div id="sec-add" class="sec-content hidden">
+      <div class="bg-white rounded-2xl shadow-xl overflow-hidden max-w-2xl">
+        <div class="bg-primary p-6 text-white">
+          <h2 class="text-xl font-black font-raleway flex items-center gap-2">
+            <i class="fas fa-user-plus text-accent"></i> Register New Faculty
+          </h2>
+          <p class="text-blue-200 text-sm mt-1">Chameli Devi Group of Institutions</p>
+        </div>
+
+        <!-- Step tabs -->
+        <div class="flex border-b border-gray-100">
+          <div id="a-tab1" class="step-tab flex-1 active"><i class="fas fa-user mr-1"></i>1. Personal Info</div>
+          <div id="a-tab2" class="step-tab flex-1"><i class="fas fa-camera mr-1"></i>2. Face Registration</div>
+        </div>
+
+        <div class="p-7">
+          <div id="add-err" class="hidden alert alert-error mb-4 text-sm"></div>
+          <div id="add-ok"  class="hidden alert alert-success mb-4 text-sm"></div>
+
+          <!-- ── STEP 1 ── -->
+          <div id="a-step1">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+              <div class="md:col-span-2">
+                <label class="lbl">Full Name *</label>
+                <input id="a-name" class="inp" type="text" placeholder="Dr. John Smith"
+                       autocomplete="off" oninput="aLive('name',this.value)">
+                <p id="ae-name" class="field-error hidden"></p>
+              </div>
+
+              <div>
+                <label class="lbl">Employee ID * <span class="text-gray-400 font-normal normal-case">(UPPERCASE letters/digits)</span></label>
+                <input id="a-empid" class="inp" type="text" placeholder="EMP001"
+                       autocomplete="off" oninput="this.value=this.value.toUpperCase();aLive('empid',this.value)"
+                       onblur="aCheckEmpId()">
+                <p id="ae-empid" class="field-error hidden"></p>
+                <p class="field-hint">3–15 uppercase letters/digits. E.g. EMP001, CSE2025</p>
+              </div>
+
+              <div>
+                <label class="lbl">Email Address *</label>
+                <input id="a-email" class="inp" type="text" placeholder="john.smith@cdgi.edu.in"
+                       autocomplete="off" oninput="aLive('email',this.value)">
+                <p id="ae-email" class="field-error hidden"></p>
+              </div>
+
+              <div>
+                <label class="lbl">Phone <span class="text-gray-400 font-normal normal-case">(optional)</span></label>
+                <input id="a-phone" class="inp" type="tel" placeholder="9876543210"
+                       autocomplete="off" oninput="aLive('phone',this.value)" maxlength="10">
+                <p id="ae-phone" class="field-error hidden"></p>
+              </div>
+
+              <div>
+                <label class="lbl">College *</label>
+                <select id="a-college" class="inp" onchange="aCollegeChange();aLive('college',this.value)">
+                  <option value="">— Select College —</option>
+                </select>
+                <p id="ae-college" class="field-error hidden"></p>
+              </div>
+
+              <div>
+                <label class="lbl">Department / Program *</label>
+                <select id="a-program" class="inp" onchange="aLive('program',this.value)" disabled>
+                  <option value="">— Select College First —</option>
+                </select>
+                <p id="ae-program" class="field-error hidden"></p>
+              </div>
+
+              <div>
+                <label class="lbl">Designation *</label>
+                <input id="a-desig" class="inp" type="text" placeholder="Assistant Professor"
+                       autocomplete="off" oninput="aLive('desig',this.value)">
+                <p id="ae-desig" class="field-error hidden"></p>
+              </div>
+
+              <div>
+                <label class="lbl">Password * <span class="text-gray-400 font-normal normal-case">(min 8 chars, 1 uppercase, 1 digit)</span></label>
+                <div class="relative">
+                  <input id="a-pwd" class="inp pr-9" type="password" placeholder="Faculty@123"
+                         autocomplete="new-password" oninput="aLive('pwd',this.value)" value="Faculty@123">
+                  <button type="button" onclick="aTglPwd('a-pwd','a-pi1')" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    <i id="a-pi1" class="fas fa-eye text-sm"></i>
+                  </button>
+                </div>
+                <p id="ae-pwd" class="field-error hidden"></p>
+                <div id="a-pwd-strength" class="mt-2 hidden">
+                  <div class="progress h-1.5"><div id="a-pwd-bar" class="progress-bar" style="width:0%;height:6px"></div></div>
+                  <p id="a-pwd-label" class="text-xs mt-1"></p>
+                </div>
+              </div>
+
+            </div>
+
+            <button onclick="aGoStep2()" class="btn btn-primary mt-7 px-8">
+              Next: Face Registration <i class="fas fa-arrow-right ml-1"></i>
+            </button>
+          </div><!-- /a-step1 -->
+
+          <!-- ── STEP 2 ── -->
+          <div id="a-step2" class="hidden">
+            <p class="alert alert-info text-sm mb-5">
+              <i class="fas fa-info-circle mr-1"></i>
+              Scan the faculty member's face for attendance verification. Ensure good lighting.
+            </p>
+            <div id="a-face-wrap"></div>
+
+            <div id="a-face-done" class="hidden mt-5 p-4 bg-green-50 rounded-xl border border-green-200">
+              <div class="flex items-center gap-4">
+                <img id="a-captured-img" src="" class="w-20 h-20 rounded-xl object-cover border-2 border-accent shadow">
+                <div>
+                  <p class="font-bold text-green-700"><i class="fas fa-check-circle mr-1"></i> Face Captured Successfully</p>
+                  <p class="text-gray-500 text-xs mt-1">Face scanned and ready for registration.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex gap-3 mt-6">
+              <button onclick="aGoBack()" class="btn btn-ghost">
+                <i class="fas fa-arrow-left"></i> Back
+              </button>
+              <button id="add-btn" onclick="submitAddFaculty()" disabled
+                      class="btn btn-success flex-1 justify-center opacity-50">
+                <i class="fas fa-user-check"></i> Register Faculty
+              </button>
+            </div>
+          </div><!-- /a-step2 -->
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── ATTENDANCE RECORDS ── -->
+    <div id="sec-records" class="sec-content hidden">
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex flex-wrap items-center gap-3">
+          <h3 class="font-bold text-primary text-sm flex-1">Attendance Records</h3>
+          <input type="date" id="rec-from" class="inp text-xs" style="width:140px" onchange="loadRecords()">
+          <span class="text-gray-400 text-xs">to</span>
+          <input type="date" id="rec-to" class="inp text-xs" style="width:140px" onchange="loadRecords()">
+          <select id="rec-dept" class="inp text-xs" style="width:180px" onchange="loadRecords()"><option value="">All Departments</option></select>
+          <button onclick="dlCSV(recData,'attendance_records')" class="btn btn-ghost btn-sm"><i class="fas fa-download"></i> CSV</button>
+        </div>
+        <div class="tbl-wrap"><table class="data-tbl"><thead><tr>
+          <th>#</th><th>Reg. Photo</th><th>In Photo</th><th>Out Photo</th>
+          <th>Name &amp; ID</th><th>Dept</th><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th>
+        </tr></thead><tbody id="rec-tb"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ── MONTHLY REPORTS ── -->
+    <div id="sec-reports" class="sec-content hidden space-y-5">
+      <div class="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+        <h3 class="font-bold text-primary text-sm mb-4 flex items-center gap-2"><i class="fas fa-chart-pie text-accent"></i>Monthly Attendance Report</h3>
+        <div class="flex flex-wrap gap-3 mb-5">
+          <select id="rep-month" class="inp" style="max-width:200px;display:inline-block" onchange="loadReport()"></select>
+          <select id="rep-dept"  class="inp" style="max-width:220px;display:inline-block" onchange="loadReport()"><option value="">All Departments</option></select>
+          <button onclick="dlCSV(repData,'monthly_report','report')" class="btn btn-ghost btn-sm"><i class="fas fa-download"></i> Export</button>
+        </div>
+        <div class="tbl-wrap"><table class="data-tbl"><thead><tr>
+          <th>#</th><th>Name</th><th>Emp. ID</th><th>Department</th>
+          <th>Working Days</th><th>Present</th><th>Absent</th><th>Half Day</th><th>Avg Hours</th><th>Attendance %</th>
+        </tr></thead><tbody id="rep-tb"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ── COLLEGES ── -->
+    <div id="sec-colleges" class="sec-content hidden space-y-5">
+      <div class="flex justify-end mb-2">
+        <button onclick="openCollegeModal()" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add College</button>
+      </div>
+      <div id="colleges-grid" class="grid grid-cols-1 md:grid-cols-2 gap-5"></div>
+    </div>
+
+    <!-- ── PROGRAMS ── -->
+    <div id="sec-programs" class="sec-content hidden space-y-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <select id="prog-college-filter" class="inp text-xs" style="width:220px" onchange="loadPrograms()"><option value="">All Colleges</option></select>
+        <button onclick="openProgramModal()" class="btn btn-primary btn-sm ml-auto"><i class="fas fa-plus"></i> Add Program</button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="data-tbl"><thead><tr>
+          <th>#</th><th>Program</th><th>College</th><th>Duration</th><th>Intake</th><th>Faculty Count</th><th>Actions</th>
+        </tr></thead><tbody id="prog-tb"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ── FACULTY MANAGEMENT ── -->
+    <div id="sec-fac-mgmt" class="sec-content hidden space-y-4">
+      <div class="flex flex-wrap items-center gap-3">
+        <select id="fm-college" class="inp text-xs" style="width:200px" onchange="fmFilterPrograms()"><option value="">All Colleges</option></select>
+        <select id="fm-program" class="inp text-xs" style="width:200px" onchange="loadFacMgmt()"><option value="">All Programs</option></select>
+        <select id="fm-desig"   class="inp text-xs" style="width:200px" onchange="loadFacMgmt()">
+          <option value="">All Designations</option>
+          <option>Professor</option>
+          <option>Associate Professor</option>
+          <option>Assistant Professor</option>
+          <option>Lecturer</option>
+        </select>
+        <input id="fm-search" class="inp text-xs" style="width:180px" placeholder="Search name / ID…" oninput="loadFacMgmt()">
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <table class="data-tbl"><thead><tr>
+          <th>#</th><th>Photo</th><th>Name</th><th>Emp. ID</th><th>Designation</th><th>Department</th><th>College</th><th>Program</th><th>Contact</th><th>Actions</th>
+        </tr></thead><tbody id="fm-tb"></tbody></table>
+      </div>
+    </div>
+
+    <!-- ── ATTENDANCE FILTER ── -->
+    <div id="sec-att-filter" class="sec-content hidden space-y-4">
+
+      <!-- Filter Bar -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label class="lbl">College</label>
+            <select id="af-college" class="inp text-xs" onchange="afFilterPrograms()"><option value="">All Colleges</option></select>
+          </div>
+          <div>
+            <label class="lbl">Course / Program</label>
+            <select id="af-program" class="inp text-xs" onchange="afFilterFaculty()"><option value="">All Programs</option></select>
+          </div>
+          <div>
+            <label class="lbl">Faculty</label>
+            <select id="af-faculty" class="inp text-xs"><option value="">All Faculty</option></select>
+          </div>
+          <div>
+            <label class="lbl">Designation</label>
+            <select id="af-desig" class="inp text-xs">
+              <option value="">All Designations</option>
+              <option>Professor</option>
+              <option>Associate Professor</option>
+              <option>Assistant Professor</option>
+              <option>Lecturer</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label class="lbl">Date From</label>
+            <input type="date" id="af-from" class="inp text-xs">
+          </div>
+          <div>
+            <label class="lbl">Date To</label>
+            <input type="date" id="af-to" class="inp text-xs">
+          </div>
+          <div>
+            <label class="lbl">Or Month</label>
+            <select id="af-month" class="inp text-xs"><option value="">— Pick Month —</option></select>
+          </div>
+          <div>
+            <label class="lbl">View Mode</label>
+            <select id="af-mode" class="inp text-xs">
+              <option value="summary">Summary (Attendance %)</option>
+              <option value="detail">Detail (Daily Records)</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mt-3">
+          <button onclick="loadAttFilter()" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Apply Filters</button>
+          <button onclick="resetAttFilter()" class="btn btn-ghost btn-sm"><i class="fas fa-times"></i> Reset</button>
+          <button onclick="exportAttFilter()" class="btn btn-ghost btn-sm ml-auto"><i class="fas fa-download"></i> Export CSV</button>
+        </div>
+      </div>
+
+      <!-- Summary Cards -->
+      <div id="af-summary-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4 hidden">
+        <div class="stat-card blue"><p class="text-xs text-gray-500 font-semibold uppercase">Total Faculty</p><p id="af-s-total" class="text-3xl font-black text-blue-700 mt-1">0</p></div>
+        <div class="stat-card green"><p class="text-xs text-gray-500 font-semibold uppercase">Avg Present</p><p id="af-s-pres" class="text-3xl font-black text-green-700 mt-1">0</p></div>
+        <div class="stat-card red"><p class="text-xs text-gray-500 font-semibold uppercase">Avg Absent</p><p id="af-s-abs" class="text-3xl font-black text-red-600 mt-1">0</p></div>
+        <div class="stat-card orange"><p class="text-xs text-gray-500 font-semibold uppercase">Avg Attendance</p><p id="af-s-pct" class="text-3xl font-black text-orange-600 mt-1">0%</p></div>
+      </div>
+
+      <!-- Results Table -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+          <h3 class="font-bold text-primary text-sm flex-1" id="af-table-title">Attendance Results</h3>
+          <span id="af-result-count" class="text-xs text-gray-400"></span>
+        </div>
+        <div id="af-loading" class="hidden text-center py-10 text-gray-400 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>
+        <div class="tbl-wrap">
+          <table class="data-tbl" id="af-table">
+            <thead id="af-thead"></thead>
+            <tbody id="af-tb"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+</div>
+
+<!-- ── Delete confirmation modal ── -->
+<div id="del-modal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background:rgba(0,0,0,.55)">
+  <div class="bg-white rounded-2xl p-7 max-w-sm w-full mx-4 shadow-2xl">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+        <i class="fas fa-trash text-red-500 text-xl"></i>
+      </div>
+      <div>
+        <h3 class="font-black text-gray-800 text-base">Delete Faculty?</h3>
+        <p class="text-gray-400 text-xs">This action permanently removes the account.</p>
+      </div>
+    </div>
+    <p class="text-gray-600 text-sm mb-6 bg-gray-50 rounded-xl p-3 border border-gray-100" id="del-msg"></p>
+    <div id="del-err" class="hidden alert alert-error text-sm mb-4"></div>
+    <div class="flex gap-3">
+      <button onclick="closeDel()" class="btn btn-ghost flex-1 justify-center">Cancel</button>
+      <button onclick="confirmDelete()" id="del-confirm-btn"
+              class="btn flex-1 justify-center" style="background:#dc2626;color:white">
+        <i class="fas fa-trash"></i> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── College Modal ── -->
+<div id="college-modal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background:rgba(0,0,0,.55)">
+  <div class="bg-white rounded-2xl p-7 max-w-md w-full mx-4 shadow-2xl">
+    <h3 class="font-black text-primary text-base mb-4" id="college-modal-title">Add College</h3>
+    <div id="college-err" class="hidden alert alert-error text-sm mb-3"></div>
+    <div class="space-y-3">
+      <div><label class="lbl">College Name *</label><input id="c-name" class="inp" placeholder="CDIPS College"></div>
+      <div><label class="lbl">Short Name *</label><input id="c-short" class="inp" placeholder="CDIPS" oninput="this.value=this.value.toUpperCase()"></div>
+      <div><label class="lbl">Description</label><input id="c-desc" class="inp" placeholder="Optional description"></div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="closeModal('college-modal')" class="btn btn-ghost flex-1 justify-center">Cancel</button>
+      <button onclick="saveCollege()" class="btn btn-primary flex-1 justify-center" id="college-save-btn"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Program Modal ── -->
+<div id="program-modal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background:rgba(0,0,0,.55)">
+  <div class="bg-white rounded-2xl p-7 max-w-md w-full mx-4 shadow-2xl">
+    <h3 class="font-black text-primary text-base mb-4" id="program-modal-title">Add Program</h3>
+    <div id="program-err" class="hidden alert alert-error text-sm mb-3"></div>
+    <div class="space-y-3">
+      <div><label class="lbl">College *</label>
+        <select id="p-college" class="inp"><option value="">— Select College —</option></select>
+      </div>
+      <div><label class="lbl">Program Name *</label><input id="p-name" class="inp" placeholder="BCA"></div>
+      <div><label class="lbl">Duration</label><input id="p-duration" class="inp" placeholder="3 Years"></div>
+      <div><label class="lbl">Intake Capacity</label><input id="p-intake" class="inp" type="number" min="0" placeholder="60"></div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="closeModal('program-modal')" class="btn btn-ghost flex-1 justify-center">Cancel</button>
+      <button onclick="saveProgram()" class="btn btn-primary flex-1 justify-center" id="program-save-btn"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Faculty Edit Modal ── -->
+<div id="fac-edit-modal" class="fixed inset-0 z-50 hidden items-center justify-center" style="background:rgba(0,0,0,.55)">
+  <div class="bg-white rounded-2xl p-7 max-w-lg w-full mx-4 shadow-2xl">
+    <h3 class="font-black text-primary text-base mb-4">Edit Faculty</h3>
+    <div id="fac-edit-err" class="hidden alert alert-error text-sm mb-3"></div>
+    <input type="hidden" id="fe-id">
+    <div class="grid grid-cols-2 gap-3">
+      <div><label class="lbl">Full Name *</label><input id="fe-name" class="inp"></div>
+      <div><label class="lbl">Phone</label><input id="fe-phone" class="inp"></div>
+      <div><label class="lbl">Department *</label><input id="fe-dept" class="inp"></div>
+      <div><label class="lbl">Designation</label><input id="fe-desig" class="inp"></div>
+      <div><label class="lbl">College</label>
+        <select id="fe-college" class="inp" onchange="feFilterPrograms()"><option value="">— None —</option></select>
+      </div>
+      <div><label class="lbl">Program</label>
+        <select id="fe-program" class="inp"><option value="">— None —</option></select>
+      </div>
+    </div>
+    <div class="flex gap-3 mt-5">
+      <button onclick="closeModal('fac-edit-modal')" class="btn btn-ghost flex-1 justify-center">Cancel</button>
+      <button onclick="saveFacEdit()" class="btn btn-primary flex-1 justify-center" id="fac-edit-save-btn"><i class="fas fa-save"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/face-api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/face-scanner.js') }}"></script>
+<script>
+let todayData=[],recData=[],repData=[],pendingDeleteId=null;
+let collegesData=[], editingCollegeId=null, editingProgramId=null;
+
+const titles={overview:"Dashboard Overview",today:"Today's Attendance",faculty:"All Faculty",
+               add:"Add Faculty",records:"Attendance Records",reports:"Monthly Reports",
+               colleges:"Colleges",programs:"Programs","fac-mgmt":"Faculty Management",
+               "att-filter":"Attendance Filter"};
+
+/* ── Clock ── */
+function tick(){
+  const n=new Date();
+  document.getElementById("live-t").textContent=n.toLocaleTimeString("en-IN");
+  document.getElementById("pg-date").textContent=n.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
+setInterval(tick,1000); tick();
+
+/* ── Section switch ── */
+function show(s){
+  document.querySelectorAll(".sec-content").forEach(e=>e.classList.add("hidden"));
+  document.querySelectorAll(".sb-btn[data-s]").forEach(b=>b.classList.remove("active"));
+  document.getElementById("sec-"+s).classList.remove("hidden");
+  document.querySelector(`[data-s="${s}"]`)?.classList.add("active");
+  document.getElementById("pg-title").textContent=titles[s]||s;
+  if(s==="today")    loadToday();
+  if(s==="faculty")  loadFaculty();
+  if(s==="records")  loadRecords();
+  if(s==="reports")  loadReport();
+  if(s==="colleges")  loadColleges();
+  if(s==="programs")  loadPrograms();
+  if(s==="fac-mgmt")  loadFacMgmt();
+  if(s==="add")       { if(!collegesData.length) loadColleges().then(aPopulateColleges); else aPopulateColleges(); }
+  if(s==="att-filter"){if(!collegesData.length)loadColleges().then(afInit);else afInit();}
+}
+
+/* ── Month selects ── */
+function fillMonths(){
+  const n=new Date(Date.now()+(5.5*60*60*1000)); let o="";
+  for(let i=0;i<18;i++){
+    const d=new Date(n.getFullYear(),n.getMonth()-i,1);
+    const v=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    o+=`<option value="${v}"${i===0?" selected":""}>${d.toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</option>`;
+  }
+  document.getElementById("rep-month").innerHTML=o;
+}
+fillMonths();
+
+const today0=new Date(Date.now()+(5.5*60*60*1000)).toISOString().slice(0,10);
+document.getElementById("td-date").value=today0;
+const m30=new Date(Date.now()+(5.5*60*60*1000)-30*864e5).toISOString().slice(0,10);
+document.getElementById("rec-from").value=m30;
+document.getElementById("rec-to").value=today0;
+
+/* ── Helpers ── */
+const fmtDate=d=>d?new Date(d+"T00:00").toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"}):"—";
+const fmtDay=d=>d?new Date(d+"T00:00").toLocaleDateString("en-IN",{weekday:"short"}):"";
+const badge=s=>({
+  present:'<span class="badge badge-present">Present</span>',
+  absent: '<span class="badge badge-absent">Absent</span>',
+  half_day:'<span class="badge badge-halfday">Half Day</span>'
+})[s]||s;
+const thumb=(p,l)=>p
+  ?`<div class="flex flex-col items-center gap-0.5"><img src="${p}" class="photo-thumb" onerror="this.style.display='none'"><span class="text-gray-400 text-[10px]">${l}</span></div>`
+  :`<span class="text-gray-300 text-xs">—</span>`;
+
+/* ── Init ── */
+async function init(){
+  const res=await fetch("/api/auth/me",{cache:"no-store"});
+  if(!res.ok){window.location.replace("/login");return;}
+  const u=await res.json();
+  if(u.role!=="admin"){window.location.replace("/dashboard");return;}
+  await loadOverview();
+}
+
+/* ── Overview ── */
+async function loadOverview(){
+  const res=await fetch("/api/admin/stats",{cache:"no-store"});
+  const d=await res.json();
+  document.getElementById("st-total").textContent=d.totalFaculty;
+  document.getElementById("st-pres").textContent=d.todayPresent;
+  document.getElementById("st-abs").textContent=d.todayAbsent;
+  document.getElementById("st-co").textContent=d.todayCheckout;
+  document.getElementById("st-hd").textContent=d.todayHalfDay;
+
+  const max=Math.max(...d.departments.map(x=>x.cnt),1);
+  document.getElementById("dept-bars").innerHTML=d.departments.map(dep=>`
+    <div class="mb-2">
+      <div class="flex justify-between mb-1">
+        <span class="text-xs font-semibold text-gray-600 truncate max-w-xs">${dep.department}</span>
+        <span class="text-xs font-black text-primary ml-2">${dep.cnt}</span>
+      </div>
+      <div class="progress"><div class="progress-bar" style="width:${(dep.cnt/max)*100}%"></div></div>
+    </div>`).join("");
+
+  const opts=d.departments.map(x=>`<option value="${x.department}">${x.department}</option>`).join("");
+  ["td-dept","fac-dept","rec-dept","rep-dept"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.innerHTML=(el.options[0]?.value===""?el.options[0].outerHTML:"")+opts;
+  });
+}
+
+/* ── Today's Attendance ── */
+async function loadToday(){
+  const date=document.getElementById("td-date").value;
+  const dept=document.getElementById("td-dept").value;
+  let url=`/api/admin/attendance?date=${date}`;
+  if(dept) url+=`&department=${encodeURIComponent(dept)}`;
+  const res=await fetch(url,{cache:"no-store"}); todayData=await res.json();
+  const tb=document.getElementById("today-tb");
+  if(!todayData.length){
+    tb.innerHTML=`<tr><td colspan="10" class="text-center text-gray-400 py-8 text-sm">No attendance records for this date.</td></tr>`;
+    return;
+  }
+  tb.innerHTML=todayData.map((r,i)=>`
+    <tr class="${r.status==="half_day"?"row-halfday":"row-present"}">
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td>${thumb(r.face_image_path,"Reg.")}</td>
+      <td>${thumb(r.check_in_image_path,"In")}</td>
+      <td>${thumb(r.check_out_image_path,"Out")}</td>
+      <td><p class="font-bold text-primary text-sm">${r.name}</p>
+          <p class="text-accent text-xs font-bold">${r.employee_id}</p>
+          <p class="text-gray-400 text-xs">${r.designation||""}</p></td>
+      <td class="text-gray-600 text-sm">${r.department}</td>
+      <td class="text-green-700 font-bold">${r.check_in_time||"—"}</td>
+      <td class="text-purple-700 font-bold">${r.check_out_time||"—"}</td>
+      <td class="font-semibold">${r.working_hours||0}h</td>
+      <td>${badge(r.status)}</td>
+    </tr>`).join("");
+}
+
+/* ── All Faculty ── */
+async function loadFaculty(){
+  const dept=document.getElementById("fac-dept").value;
+  const search=document.getElementById("fac-search").value.trim();
+  let url="/api/admin/faculty?";
+  if(dept) url+=`department=${encodeURIComponent(dept)}&`;
+  if(search) url+=`search=${encodeURIComponent(search)}`;
+  const res=await fetch(url,{cache:"no-store"}); const data=await res.json();
+  const tb=document.getElementById("fac-tb");
+  if(!data.length){
+    tb.innerHTML=`<tr><td colspan="12" class="text-center text-gray-400 py-8 text-sm">No faculty found.</td></tr>`;
+    return;
+  }
+  tb.innerHTML=data.map((f,i)=>`
+    <tr>
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td>${thumb(f.face_image_path,"")}</td>
+      <td><p class="font-bold text-primary text-sm">${f.name}</p></td>
+      <td class="text-accent font-bold text-sm">${f.employee_id}</td>
+      <td class="text-gray-600 text-sm">${f.department}</td>
+      <td class="text-gray-600 text-sm">${f.designation||"—"}</td>
+      <td class="text-gray-600 text-sm">${f.email}</td>
+      <td class="text-gray-600 text-sm">${f.phone||"—"}</td>
+      <td>${f.has_face_registered?'<span class="badge badge-present">✓ Yes</span>':'<span class="badge badge-absent">✗ No</span>'}</td>
+      <td>${f.is_active?'<span class="badge badge-checkin">Active</span>':'<span class="badge badge-absent">Inactive</span>'}</td>
+      <td class="text-gray-400 text-xs">${f.created_at?.slice(0,10)||"—"}</td>
+      <td>
+        <div class="flex gap-1">
+          <button data-id="${f.id}" data-name="${f.name}" data-active="${f.is_active}" data-action="toggle"
+                  class="btn btn-sm ${f.is_active?'btn-ghost':'btn-success'}" style="font-size:11px;padding:4px 8px"
+                  title="${f.is_active?'Deactivate':'Activate'}">
+            <i class="fas fa-${f.is_active?'ban':'check'} text-xs"></i>
+          </button>
+          <button data-id="${f.id}" data-name="${f.name}" data-empid="${f.employee_id}" data-action="delete"
+                  class="btn btn-sm btn-danger" style="font-size:11px;padding:4px 8px" title="Delete">
+            <i class="fas fa-trash text-xs"></i>
+          </button>
+        </div>
+      </td>
+    </tr>`).join("");
+}
+
+/* ── Faculty table delegated click handler ── */
+document.getElementById("fac-tb").addEventListener("click", function(e){
+  const btn = e.target.closest("button[data-action]");
+  if(!btn) return;
+  const id     = parseInt(btn.dataset.id);
+  const name   = btn.dataset.name;
+  const action = btn.dataset.action;
+  if(action==="toggle"){
+    const isActive = parseInt(btn.dataset.active);
+    toggleFaculty(id, name, isActive);
+  } else if(action==="delete"){
+    askDelete(id, name, btn.dataset.empid);
+  }
+});
+
+/* ── Toggle active/inactive ── */
+async function toggleFaculty(id, name, isActive){
+  if(!confirm(`${isActive?'Deactivate':'Activate'} ${name}?`)) return;
+  const res=await fetch(`/api/admin/faculty/${id}/toggle`,{method:"POST"});
+  const d=await res.json();
+  if(res.ok) loadFaculty();
+  else alert(d.error||"Failed");
+}
+
+/* ── Delete modal ── */
+function askDelete(id, name, empId){
+  pendingDeleteId=id;
+  document.getElementById("del-msg").textContent=`You are about to permanently delete ${name} (${empId}) from the system. Their attendance records will also be removed. This cannot be undone.`;
+  document.getElementById("del-err").classList.add("hidden");
+  document.getElementById("del-confirm-btn").disabled=false;
+  document.getElementById("del-confirm-btn").innerHTML='<i class="fas fa-trash"></i> Delete';
+  const modal=document.getElementById("del-modal");
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+function closeDel(){
+  pendingDeleteId=null;
+  const modal=document.getElementById("del-modal");
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+}
+
+async function confirmDelete(){
+  if(!pendingDeleteId) return;
+  const btn=document.getElementById("del-confirm-btn");
+  const errEl=document.getElementById("del-err");
+  btn.disabled=true;
+  btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Deleting…';
+  errEl.classList.add("hidden");
+  try{
+    const res=await fetch(`/api/admin/faculty/${pendingDeleteId}`,{method:"DELETE"});
+    const d=await res.json();
+    if(res.ok){
+      closeDel();
+      loadFaculty();
+      // Refresh overview counts
+      loadOverview();
+    } else {
+      errEl.textContent=d.error||"Delete failed. Please try again.";
+      errEl.classList.remove("hidden");
+      btn.disabled=false;
+      btn.innerHTML='<i class="fas fa-trash"></i> Delete';
+    }
+  } catch(e){
+    errEl.textContent="Server error: "+e.message;
+    errEl.classList.remove("hidden");
+    btn.disabled=false;
+    btn.innerHTML='<i class="fas fa-trash"></i> Delete';
+  }
+}
+
+/* ── Add Faculty ── */
+/* ── Add Faculty — 2-step with face scan ── */
+let aFaceData = null;
+let aFormData = {};
+
+const A_EMAIL_RE = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+const A_PHONE_RE = /^[6-9]\d{9}$/;
+const A_EMP_RE   = /^[A-Z0-9]{3,15}$/;
+
+function aShowErr(id, msg) {
+  const el = document.getElementById("ae-" + id);
+  if (el) { el.textContent = msg; el.classList.toggle("hidden", !msg); }
+  const fmap = {name:"a-name",empid:"a-empid",email:"a-email",phone:"a-phone",
+                college:"a-college",program:"a-program",desig:"a-desig",pwd:"a-pwd"};
+  const inp = document.getElementById(fmap[id]);
+  if (inp) { inp.classList.toggle("error", !!msg); inp.classList.toggle("valid", !msg && inp.value.trim()); }
+}
+
+function aLive(field, val) {
+  switch(field) {
+    case "name":    aShowErr("name",    val.trim().length < 2 ? "Full name must be at least 2 characters." : ""); break;
+    case "empid":   aShowErr("empid",   !A_EMP_RE.test(val.trim()) ? `Employee ID must be 3–15 uppercase letters/digits.` : ""); break;
+    case "email":   aShowErr("email",   !A_EMAIL_RE.test(val.trim()) ? "Invalid email address." : ""); break;
+    case "phone":   if(val.trim()) aShowErr("phone", !A_PHONE_RE.test(val.trim()) ? "Enter valid 10-digit Indian mobile." : ""); else aShowErr("phone",""); break;
+    case "college": aShowErr("college", !val ? "Please select a college." : ""); break;
+    case "program": aShowErr("program", !val ? "Please select a department." : ""); break;
+    case "desig":   aShowErr("desig",   val.trim().length < 2 ? "Designation is required." : ""); break;
+    case "pwd":
+      aPwdStrength(val);
+      if(val.length < 8)          { aShowErr("pwd","Password must be at least 8 characters."); break; }
+      if(!/[A-Z]/.test(val))      { aShowErr("pwd","Must contain at least one uppercase letter."); break; }
+      if(!/[0-9]/.test(val))      { aShowErr("pwd","Must contain at least one digit."); break; }
+      aShowErr("pwd",""); break;
+  }
+}
+
+/* ── Real-time Employee ID availability check (admin) ── */
+let _aEmpIdTimer = null;
+async function aCheckEmpId() {
+  const val   = document.getElementById("a-empid").value.trim().toUpperCase();
+  const errEl = document.getElementById("ae-empid");
+  const inp   = document.getElementById("a-empid");
+  if (!/^[A-Z0-9]{3,15}$/.test(val)) return; // format error already shown
+  clearTimeout(_aEmpIdTimer);
+  _aEmpIdTimer = setTimeout(async () => {
+    try {
+      const res  = await fetch(`/api/auth/check-empid?id=${encodeURIComponent(val)}`);
+      const data = await res.json();
+      if (!data.available) {
+        errEl.textContent = data.message;
+        errEl.classList.remove("hidden");
+        inp.classList.add("error");
+        inp.classList.remove("valid");
+      } else {
+        errEl.textContent = data.message;
+        errEl.classList.remove("hidden");
+        errEl.style.color = "#16a34a";
+        inp.classList.remove("error");
+        inp.classList.add("valid");
+        setTimeout(() => { errEl.classList.add("hidden"); errEl.style.color = ""; }, 2500);
+      }
+    } catch(e) { /* ignore network errors */ }
+  }, 300);
+}
+
+function aPwdStrength(pwd) {
+  const wrap=document.getElementById("a-pwd-strength"),bar=document.getElementById("a-pwd-bar"),lbl=document.getElementById("a-pwd-label");
+  wrap.classList.remove("hidden");
+  let score=0;
+  if(pwd.length>=8)score++;if(/[A-Z]/.test(pwd))score++;if(/[0-9]/.test(pwd))score++;if(/[^A-Za-z0-9]/.test(pwd))score++;
+  const c=["#dc2626","#f97316","#eab308","#16a34a"],l=["Weak","Fair","Good","Strong"];
+  bar.style.width=(score*25)+"%";bar.style.background=c[score-1]||"#dc2626";
+  lbl.textContent=pwd?(l[score-1]||"Very Weak"):"";lbl.style.color=c[score-1]||"#dc2626";
+}
+
+function aTglPwd(inputId, iconId) {
+  const i=document.getElementById(inputId),ic=document.getElementById(iconId);
+  i.type=i.type==="password"?"text":"password";
+  ic.className=i.type==="password"?"fas fa-eye text-sm":"fas fa-eye-slash text-sm";
+}
+
+function aCollegeChange() {
+  const cid = document.getElementById("a-college").value;
+  const progSel = document.getElementById("a-program");
+  const college = collegesData.find(c => c.id == cid);
+  if (college && college.programs && college.programs.length) {
+    progSel.innerHTML = '<option value="">— Select Program —</option>' +
+      college.programs.map(p => `<option value="${p.id}">${p.name}</option>`).join("");
+    progSel.disabled = false;
+  } else {
+    progSel.innerHTML = '<option value="">— Select College First —</option>';
+    progSel.disabled = true;
+  }
+}
+
+function aPopulateColleges() {
+  const sel = document.getElementById("a-college");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">— Select College —</option>' +
+    collegesData.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+}
+
+function aGoStep2() {
+  const name    = document.getElementById("a-name").value.trim();
+  const empid   = document.getElementById("a-empid").value.trim().toUpperCase();
+  const email   = document.getElementById("a-email").value.trim().toLowerCase();
+  const phone   = document.getElementById("a-phone").value.trim();
+  const college = document.getElementById("a-college").value;
+  const program = document.getElementById("a-program").value;
+  const desig   = document.getElementById("a-desig").value.trim();
+  const pwd     = document.getElementById("a-pwd").value;
+
+  aLive("name",name); aLive("empid",empid); aLive("email",email);
+  aLive("phone",phone); aLive("college",college); aLive("program",program);
+  aLive("desig",desig); aLive("pwd",pwd);
+
+  const hasErr = ["name","empid","email","phone","college","program","desig","pwd"]
+    .some(f => !document.getElementById("ae-"+f)?.classList.contains("hidden"));
+  if (hasErr) {
+    const errEl = document.getElementById("add-err");
+    errEl.textContent = "Please fix the errors above before proceeding.";
+    errEl.classList.remove("hidden"); return;
+  }
+  document.getElementById("add-err").classList.add("hidden");
+
+  const progSel = document.getElementById("a-program");
+  const dept = progSel.options[progSel.selectedIndex]?.text || "";
+
+  aFormData = { name, employeeId:empid, email, phone, department:dept, designation:desig,
+                password:pwd, collegeId:parseInt(college), programId:parseInt(program) };
+
+  document.getElementById("a-step1").classList.add("hidden");
+  document.getElementById("a-step2").classList.remove("hidden");
+  document.getElementById("a-tab1").classList.remove("active");
+  document.getElementById("a-tab2").classList.add("active");
+
+  initFaceScanner("a-face-wrap", (descriptor, imageB64) => {
+    aFaceData = { descriptor, image: imageB64 };
+    document.getElementById("a-captured-img").src = imageB64;
+    document.getElementById("a-face-done").classList.remove("hidden");
+    const sb = document.getElementById("add-btn");
+    sb.disabled = false; sb.classList.remove("opacity-50");
+  });
+}
+
+function aGoBack() {
+  stopFaceScanner();
+  aFaceData = null;
+  document.getElementById("a-step2").classList.add("hidden");
+  document.getElementById("a-step1").classList.remove("hidden");
+  document.getElementById("a-tab1").classList.add("active");
+  document.getElementById("a-tab2").classList.remove("active");
+  document.getElementById("a-face-done").classList.add("hidden");
+  const sb = document.getElementById("add-btn");
+  sb.disabled = true; sb.classList.add("opacity-50");
+}
+
+async function submitAddFaculty() {
+  if (!aFaceData) return;
+  const btn   = document.getElementById("add-btn");
+  const errEl = document.getElementById("add-err");
+  const okEl  = document.getElementById("add-ok");
+  errEl.classList.add("hidden"); okEl.classList.add("hidden");
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering…';
+
+  try {
+    const res = await fetch("/api/admin/faculty/add", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...aFormData, faceDescriptor: aFaceData.descriptor, faceImage: aFaceData.image })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (data.errors) {
+        const fieldMap = { name:"name", employeeId:"empid", email:"email", phone:"phone",
+                           department:"program", designation:"desig", password:"pwd", face:"empid" };
+        Object.entries(data.errors).forEach(([k,v]) => aShowErr(fieldMap[k]||"empid", v));
+        errEl.textContent = "Please fix the errors and try again.";
+      } else {
+        errEl.textContent = data.error || "Registration failed.";
+      }
+      errEl.classList.remove("hidden");
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-user-check"></i> Register Faculty';
+      return;
+    }
+    okEl.innerHTML = `<i class="fas fa-check-circle mr-1"></i> ${data.message}`;
+    okEl.classList.remove("hidden");
+    // Reset form fully
+    aFaceData = null; aFormData = {};
+    ["a-name","a-empid","a-email","a-phone","a-desig"].forEach(id => document.getElementById(id).value = "");
+    document.getElementById("a-college").value = "";
+    document.getElementById("a-program").innerHTML = '<option value="">— Select College First —</option>';
+    document.getElementById("a-program").disabled = true;
+    document.getElementById("a-pwd").value = "Faculty@123";
+    document.getElementById("a-face-done").classList.add("hidden");
+    stopFaceScanner();
+    // Go back to step 1
+    document.getElementById("a-step2").classList.add("hidden");
+    document.getElementById("a-step1").classList.remove("hidden");
+    document.getElementById("a-tab1").classList.add("active");
+    document.getElementById("a-tab2").classList.remove("active");
+    btn.disabled = true; btn.classList.add("opacity-50");
+    btn.innerHTML = '<i class="fas fa-user-check"></i> Register Faculty';
+    loadOverview();
+  } catch(e) {
+    errEl.textContent = "Server error: " + e.message;
+    errEl.classList.remove("hidden");
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-user-check"></i> Register Faculty';
+  }
+}
+
+/* ── Attendance Records ── */
+async function loadRecords(){
+  const from=document.getElementById("rec-from").value;
+  const to  =document.getElementById("rec-to").value;
+  const dept=document.getElementById("rec-dept").value;
+  let url=`/api/admin/attendance?from=${from}&to=${to}`;
+  if(dept) url+=`&department=${encodeURIComponent(dept)}`;
+  const res=await fetch(url,{cache:"no-store"}); recData=await res.json();
+  const tb=document.getElementById("rec-tb");
+  if(!recData.length){
+    tb.innerHTML=`<tr><td colspan="11" class="text-center text-gray-400 py-8 text-sm">No records found for selected period.</td></tr>`;
+    return;
+  }
+  tb.innerHTML=recData.map((r,i)=>`
+    <tr class="${r.status==="absent"?"row-absent":r.status==="half_day"?"row-halfday":"row-present"}">
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td>${thumb(r.face_image_path,"Reg.")}</td>
+      <td>${thumb(r.check_in_image_path,"In")}</td>
+      <td>${thumb(r.check_out_image_path,"Out")}</td>
+      <td><p class="font-bold text-primary text-sm">${r.name}</p>
+          <p class="text-accent text-xs font-bold">${r.employee_id}</p>
+          <p class="text-gray-400 text-xs">${r.designation||""}</p></td>
+      <td class="text-sm">${r.department}</td>
+      <td class="font-semibold text-sm">${fmtDate(r.attendance_date)} <span class="text-gray-400 text-xs">${fmtDay(r.attendance_date)}</span></td>
+      <td class="text-green-700 font-bold">${r.check_in_time||"—"}</td>
+      <td class="text-purple-700 font-bold">${r.check_out_time||"—"}</td>
+      <td class="font-semibold">${r.working_hours||0}h</td>
+      <td>${badge(r.status)}</td>
+    </tr>`).join("");
+}
+
+/* ── Monthly Report ── */
+async function loadReport(){
+  const month=document.getElementById("rep-month").value;
+  const dept =document.getElementById("rep-dept").value;
+  const tb=document.getElementById("rep-tb");
+  tb.innerHTML=`<tr><td colspan="10" class="text-center text-gray-400 py-8 text-sm"><i class="fas fa-spinner fa-spin mr-1"></i> Loading report…</td></tr>`;
+  try {
+    let url=`/api/admin/report/summary?month=${month}`;
+    if(dept) url+=`&department=${encodeURIComponent(dept)}`;
+    const res=await fetch(url,{cache:"no-store"});
+    const d=await res.json();
+    repData=d.faculty||[];
+    if(!repData.length){
+      tb.innerHTML=`<tr><td colspan="10" class="text-center text-gray-400 py-8 text-sm">No faculty found for selected period.</td></tr>`;
+      return;
+    }
+    tb.innerHTML=repData.map((f,i)=>{
+      const pct=f.working_days?Math.round(((f.present+(f.half_day*.5))/f.working_days)*100):0;
+      const col=pct>=75?"#16a34a":pct>=50?"#f59e0b":"#dc2626";
+      const rowCls=pct>=75?"row-present":pct>=50?"row-halfday":"row-absent";
+      return `<tr class="${rowCls}">
+        <td class="text-gray-400 font-bold">${i+1}</td>
+        <td class="font-bold text-primary text-sm">${f.name}</td>
+        <td class="text-accent font-bold text-sm">${f.employeeId}</td>
+        <td class="text-sm">${f.department}</td>
+        <td class="text-center font-semibold">${f.working_days}</td>
+        <td class="text-center"><span class="badge badge-present">${f.present}</span></td>
+        <td class="text-center"><span class="badge badge-absent">${f.absent}</span></td>
+        <td class="text-center"><span class="badge badge-halfday">${f.half_day}</span></td>
+        <td class="text-center font-semibold">${f.avgHours}h</td>
+        <td><div class="flex items-center gap-2">
+          <div class="progress flex-1" style="min-width:60px">
+            <div class="progress-bar" style="width:${pct}%;background:${col}"></div>
+          </div>
+          <span class="text-xs font-black" style="color:${col};min-width:36px">${pct}%</span>
+        </div></td>
+      </tr>`;
+    }).join("");
+  } catch(e) {
+    tb.innerHTML=`<tr><td colspan="10" class="text-center text-red-400 py-8 text-sm">Error loading report: ${e.message}</td></tr>`;
+  }
+}
+
+/* ── CSV Export ── */
+function dlCSV(rows, filename, type){
+  if(!rows?.length){alert("No data to export.");return;}
+  let hdrs,body;
+  if(type==="report"){
+    hdrs=["Name","Employee ID","Department","Working Days","Present","Absent","Half Day","Avg Hours","Attendance %"];
+    body=rows.map(f=>{
+      const pct=f.working_days?Math.round(((f.present+(f.half_day*.5))/f.working_days)*100):0;
+      return[f.name,f.employeeId,f.department,f.working_days,f.present,f.absent,f.half_day,f.avgHours,pct+"%"];
+    });
+  } else {
+    hdrs=["Name","Employee ID","Department","Date","Day","Check In","Check Out","Working Hours","Status"];
+    body=rows.map(r=>[r.name,r.employee_id,r.department,r.attendance_date,fmtDay(r.attendance_date),
+                      r.check_in_time||"",r.check_out_time||"",r.working_hours||0,r.status]);
+  }
+  const csv=[hdrs,...body].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+  a.download=filename+"_"+new Date(Date.now()+(5.5*60*60*1000)).toISOString().slice(0,10)+".csv";
+  a.click();
+}
+
+/* Close modal on backdrop click */
+document.getElementById("del-modal").addEventListener("click",function(e){if(e.target===this)closeDel();});
+
+/* ── Modal helpers ── */
+function openModal(id){const m=document.getElementById(id);m.classList.remove("hidden");m.classList.add("flex");}
+function closeModal(id){const m=document.getElementById(id);m.classList.add("hidden");m.classList.remove("flex");}
+["college-modal","program-modal","fac-edit-modal"].forEach(id=>{
+  document.getElementById(id).addEventListener("click",function(e){if(e.target===this)closeModal(id);});
+});
+
+async function loadColleges(){
+  const res=await fetch("/api/colleges",{cache:"no-store"});
+  collegesData=await res.json();
+  populateCollegeSelects();
+  const grid=document.getElementById("colleges-grid");
+  if(!collegesData.length){grid.innerHTML='<p class="text-gray-400 text-sm">No colleges found.</p>';return;}
+  grid.innerHTML=collegesData.map(c=>`
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <span class="inline-block bg-blue-100 text-blue-700 text-xs font-black px-2 py-0.5 rounded-lg mb-1">${c.short_name}</span>
+          <h4 class="font-black text-primary text-base">${c.name}</h4>
+          ${c.description?`<p class="text-gray-400 text-xs mt-0.5">${c.description}</p>`:""}
+        </div>
+        <div class="flex gap-1">
+          <button onclick="editCollege(${c.id})" class="btn btn-ghost btn-sm" title="Edit"><i class="fas fa-edit text-xs"></i></button>
+          <button onclick="deleteCollege(${c.id},'${c.name.replace(/'/g,"\\'")}')"
+                  class="btn btn-danger btn-sm" title="Delete"><i class="fas fa-trash text-xs"></i></button>
+        </div>
+      </div>
+      <div class="space-y-1">
+        ${c.programs.map(p=>`
+          <div class="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+            <span class="text-sm font-semibold text-gray-700">${p.name}</span>
+            <div class="flex items-center gap-2">
+              ${p.duration?`<span class="text-xs text-gray-400">${p.duration}</span>`:""}
+              <span class="text-xs bg-blue-50 text-blue-600 font-bold px-2 py-0.5 rounded-lg">${p.student_count} faculty</span>
+              <button onclick="editProgram(${p.id})" class="btn btn-ghost btn-sm" style="padding:2px 6px"><i class="fas fa-edit text-xs"></i></button>
+              <button onclick="deleteProgram(${p.id},'${p.name.replace(/'/g,"\\'")}')"
+                      class="btn btn-danger btn-sm" style="padding:2px 6px"><i class="fas fa-trash text-xs"></i></button>
+            </div>
+          </div>`).join("")}
+        ${!c.programs.length?'<p class="text-gray-300 text-xs text-center py-2">No programs yet</p>':""}
+      </div>
+    </div>`).join("");
+}
+
+function populateCollegeSelects(){
+  const opts=collegesData.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+  ["p-college","fe-college","prog-college-filter","fm-college"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    const first=el.options[0]?.outerHTML||"";
+    el.innerHTML=first+opts;
+  });
+}
+
+function openCollegeModal(id=null){
+  editingCollegeId=id;
+  document.getElementById("college-modal-title").textContent=id?"Edit College":"Add College";
+  document.getElementById("college-err").classList.add("hidden");
+  if(!id){document.getElementById("c-name").value="";document.getElementById("c-short").value="";document.getElementById("c-desc").value="";}
+  openModal("college-modal");
+}
+
+function editCollege(id){
+  const c=collegesData.find(x=>x.id===id);
+  if(!c) return;
+  editingCollegeId=id;
+  document.getElementById("college-modal-title").textContent="Edit College";
+  document.getElementById("c-name").value=c.name;
+  document.getElementById("c-short").value=c.short_name;
+  document.getElementById("c-desc").value=c.description||"";
+  document.getElementById("college-err").classList.add("hidden");
+  openModal("college-modal");
+}
+
+async function saveCollege(){
+  const btn=document.getElementById("college-save-btn");
+  const errEl=document.getElementById("college-err");
+  const name=document.getElementById("c-name").value.trim();
+  const shortName=document.getElementById("c-short").value.trim();
+  const description=document.getElementById("c-desc").value.trim();
+  if(!name||!shortName){errEl.textContent="Name and short name are required.";errEl.classList.remove("hidden");return;}
+  btn.disabled=true;
+  const url=editingCollegeId?`/api/colleges/${editingCollegeId}`:"/api/colleges";
+  const method=editingCollegeId?"PUT":"POST";
+  const res=await fetch(url,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify({name,shortName,description})});
+  const d=await res.json();
+  btn.disabled=false;
+  if(!res.ok){errEl.textContent=d.error||"Failed.";errEl.classList.remove("hidden");return;}
+  closeModal("college-modal");
+  loadColleges();
+}
+
+async function deleteCollege(id,name){
+  if(!confirm(`Delete college "${name}" and all its programs?`)) return;
+  const res=await fetch(`/api/colleges/${id}`,{method:"DELETE"});
+  const d=await res.json();
+  if(res.ok) loadColleges();
+  else alert(d.error||"Failed.");
+}
+
+/* ── Programs ── */
+async function loadPrograms(){
+  const cid=document.getElementById("prog-college-filter").value;
+  const res=await fetch("/api/colleges",{cache:"no-store"});
+  collegesData=await res.json();
+  populateCollegeSelects();
+  const tb=document.getElementById("prog-tb");
+  let rows=[];
+  collegesData.forEach(c=>{
+    if(cid && c.id!=cid) return;
+    c.programs.forEach(p=>rows.push({...p,collegeName:c.name}));
+  });
+  if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="text-center text-gray-400 py-8 text-sm">No programs found.</td></tr>';return;}
+  tb.innerHTML=rows.map((p,i)=>`
+    <tr>
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td class="font-semibold text-primary text-sm">${p.name}</td>
+      <td class="text-gray-600 text-sm">${p.collegeName}</td>
+      <td class="text-gray-500 text-sm">${p.duration||"—"}</td>
+      <td class="text-center text-sm">${p.intake_capacity||"—"}</td>
+      <td class="text-center"><span class="badge badge-present">${p.student_count}</span></td>
+      <td>
+        <div class="flex gap-1">
+          <button onclick="editProgram(${p.id})" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px"><i class="fas fa-edit text-xs"></i></button>
+          <button onclick="deleteProgram(${p.id},'${p.name.replace(/'/g,"\\'")}')"
+                  class="btn btn-danger btn-sm" style="font-size:11px;padding:4px 8px"><i class="fas fa-trash text-xs"></i></button>
+        </div>
+      </td>
+    </tr>`).join("");
+}
+
+function openProgramModal(){
+  editingProgramId=null;
+  document.getElementById("program-modal-title").textContent="Add Program";
+  document.getElementById("program-err").classList.add("hidden");
+  document.getElementById("p-college").value="";
+  document.getElementById("p-name").value="";
+  document.getElementById("p-duration").value="";
+  document.getElementById("p-intake").value="";
+  openModal("program-modal");
+}
+
+function editProgram(id){
+  let prog=null, cid=null;
+  for(const c of collegesData){
+    const p=c.programs.find(x=>x.id===id);
+    if(p){prog=p;cid=c.id;break;}
+  }
+  if(!prog) return;
+  editingProgramId=id;
+  document.getElementById("program-modal-title").textContent="Edit Program";
+  document.getElementById("program-err").classList.add("hidden");
+  document.getElementById("p-college").value=cid;
+  document.getElementById("p-name").value=prog.name;
+  document.getElementById("p-duration").value=prog.duration||"";
+  document.getElementById("p-intake").value=prog.intake_capacity||"";
+  openModal("program-modal");
+}
+
+async function saveProgram(){
+  const btn=document.getElementById("program-save-btn");
+  const errEl=document.getElementById("program-err");
+  const collegeId=document.getElementById("p-college").value;
+  const name=document.getElementById("p-name").value.trim();
+  const duration=document.getElementById("p-duration").value.trim();
+  const intakeCapacity=parseInt(document.getElementById("p-intake").value)||0;
+  if(!name){errEl.textContent="Program name is required.";errEl.classList.remove("hidden");return;}
+  if(!editingProgramId&&!collegeId){errEl.textContent="Please select a college.";errEl.classList.remove("hidden");return;}
+  btn.disabled=true;
+  const url=editingProgramId?`/api/programs/${editingProgramId}`:"/api/programs";
+  const method=editingProgramId?"PUT":"POST";
+  const body=editingProgramId?{name,duration,intakeCapacity}:{collegeId:parseInt(collegeId),name,duration,intakeCapacity};
+  const res=await fetch(url,{method,headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const d=await res.json();
+  btn.disabled=false;
+  if(!res.ok){errEl.textContent=d.error||"Failed.";errEl.classList.remove("hidden");return;}
+  closeModal("program-modal");
+  loadColleges();
+  loadPrograms();
+}
+
+async function deleteProgram(id,name){
+  if(!confirm(`Delete program "${name}"?`)) return;
+  const res=await fetch(`/api/programs/${id}`,{method:"DELETE"});
+  const d=await res.json();
+  if(res.ok){loadColleges();loadPrograms();}
+  else alert(d.error||"Failed.");
+}
+
+/* ── Faculty Management ── */
+async function loadFacMgmt(){
+  const cid=document.getElementById("fm-college").value;
+  const pid=document.getElementById("fm-program").value;
+  const desig=document.getElementById("fm-desig").value;
+  const search=document.getElementById("fm-search").value.trim();
+  let url="/api/admin/faculty?";
+  if(search) url+=`search=${encodeURIComponent(search)}&`;
+  const res=await fetch(url,{cache:"no-store"});
+  let data=await res.json();
+  if(cid) data=data.filter(f=>f.college_id==cid);
+  if(pid) data=data.filter(f=>f.program_id==pid);
+  if(desig) data=data.filter(f=>f.designation===desig);
+  const tb=document.getElementById("fm-tb");
+  if(!data.length){tb.innerHTML='<tr><td colspan="10" class="text-center text-gray-400 py-8 text-sm">No faculty found.</td></tr>';return;}
+  tb.innerHTML=data.map((f,i)=>{
+    const college=collegesData.find(c=>c.id===f.college_id);
+    const program=college?.programs.find(p=>p.id===f.program_id);
+    return `<tr>
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td>${thumb(f.face_image_path,"")}</td>
+      <td><p class="font-bold text-primary text-sm">${f.name}</p></td>
+      <td class="text-accent font-bold text-sm">${f.employee_id}</td>
+      <td class="text-sm">${f.designation||"—"}</td>
+      <td class="text-sm text-gray-600">${f.department}</td>
+      <td class="text-sm">${college?college.short_name:"—"}</td>
+      <td class="text-sm">${program?program.name:"—"}</td>
+      <td class="text-xs text-gray-500">${f.email}<br>${f.phone||""}</td>
+      <td>
+        <button onclick="openFacEdit(${f.id})" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 8px">
+          <i class="fas fa-edit text-xs"></i> Edit
+        </button>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function fmFilterPrograms(){
+  const cid=document.getElementById("fm-college").value;
+  const sel=document.getElementById("fm-program");
+  const college=collegesData.find(c=>c.id==cid);
+  sel.innerHTML='<option value="">All Programs</option>'+(college?college.programs.map(p=>`<option value="${p.id}">${p.name}</option>`).join(""):"");
+  loadFacMgmt();
+}
+
+function feFilterPrograms(){
+  const cid=document.getElementById("fe-college").value;
+  const sel=document.getElementById("fe-program");
+  const college=collegesData.find(c=>c.id==cid);
+  sel.innerHTML='<option value="">— None —</option>'+(college?college.programs.map(p=>`<option value="${p.id}">${p.name}</option>`).join(""):"");
+}
+
+function openFacEdit(id){
+  const res=fetch(`/api/admin/faculty?search=`,{cache:"no-store"});
+  // Re-fetch full list to get college_id/program_id
+  fetch("/api/admin/faculty",{cache:"no-store"}).then(r=>r.json()).then(data=>{
+    const f=data.find(x=>x.id===id);
+    if(!f) return;
+    document.getElementById("fe-id").value=f.id;
+    document.getElementById("fe-name").value=f.name;
+    document.getElementById("fe-phone").value=f.phone||"";
+    document.getElementById("fe-dept").value=f.department;
+    document.getElementById("fe-desig").value=f.designation||"";
+    // Populate college select then set value
+    const cSel=document.getElementById("fe-college");
+    cSel.value=f.college_id||"";
+    feFilterPrograms();
+    document.getElementById("fe-program").value=f.program_id||"";
+    document.getElementById("fac-edit-err").classList.add("hidden");
+    openModal("fac-edit-modal");
+  });
+}
+
+async function saveFacEdit(){
+  const btn=document.getElementById("fac-edit-save-btn");
+  const errEl=document.getElementById("fac-edit-err");
+  const id=document.getElementById("fe-id").value;
+  const name=document.getElementById("fe-name").value.trim();
+  const phone=document.getElementById("fe-phone").value.trim();
+  const department=document.getElementById("fe-dept").value.trim();
+  const designation=document.getElementById("fe-desig").value.trim();
+  const collegeId=document.getElementById("fe-college").value||null;
+  const programId=document.getElementById("fe-program").value||null;
+  if(!name||!department){errEl.textContent="Name and department are required.";errEl.classList.remove("hidden");return;}
+  btn.disabled=true;
+  const res=await fetch(`/api/admin/faculty/${id}`,{
+    method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({name,phone,department,designation,collegeId,programId})
+  });
+  const d=await res.json();
+  btn.disabled=false;
+  if(!res.ok){errEl.textContent=d.error||"Failed.";errEl.classList.remove("hidden");return;}
+  closeModal("fac-edit-modal");
+  loadFacMgmt();
+}
+
+/* Close modal on backdrop click */
+document.getElementById("del-modal").addEventListener("click",function(e){if(e.target===this)closeDel();});
+
+/* ── Attendance Filter section ── */
+let afData = [];
+
+function afInit(){
+  const n=new Date(Date.now()+(5.5*60*60*1000)); let o='<option value="">— Pick Month —</option>';
+  for(let i=0;i<18;i++){
+    const d=new Date(n.getFullYear(),n.getMonth()-i,1);
+    const v=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    o+=`<option value="${v}">${d.toLocaleDateString("en-IN",{month:"long",year:"numeric"})}</option>`;
+  }
+  document.getElementById("af-month").innerHTML=o;
+  const t=new Date(Date.now()+(5.5*60*60*1000)).toISOString().slice(0,10);
+  document.getElementById("af-from").value=t;
+  document.getElementById("af-to").value=t;
+  const opts=collegesData.map(c=>`<option value="${c.id}">${c.name}</option>`).join("");
+  document.getElementById("af-college").innerHTML='<option value="">All Colleges</option>'+opts;
+}
+
+function afFilterPrograms(){
+  const cid=document.getElementById("af-college").value;
+  const college=collegesData.find(c=>c.id==cid);
+  document.getElementById("af-program").innerHTML='<option value="">All Programs</option>'
+    +(college?college.programs.map(p=>`<option value="${p.id}">${p.name}</option>`).join(""):"");
+  document.getElementById("af-faculty").innerHTML='<option value="">All Faculty</option>';
+  afFilterFaculty();
+}
+
+async function afFilterFaculty(){
+  const cid=document.getElementById("af-college").value;
+  const pid=document.getElementById("af-program").value;
+  const res=await fetch("/api/admin/faculty",{cache:"no-store"});
+  let data=await res.json();
+  if(cid) data=data.filter(f=>f.college_id==cid);
+  if(pid) data=data.filter(f=>f.program_id==pid);
+  document.getElementById("af-faculty").innerHTML='<option value="">All Faculty</option>'
+    +data.map(f=>`<option value="${f.id}">${f.name} (${f.employee_id})</option>`).join("");
+}
+
+async function loadAttFilter(){
+  const cid  =document.getElementById("af-college").value;
+  const pid  =document.getElementById("af-program").value;
+  const fid  =document.getElementById("af-faculty").value;
+  const desig=document.getElementById("af-desig").value;
+  const from =document.getElementById("af-from").value;
+  const to   =document.getElementById("af-to").value;
+  const month=document.getElementById("af-month").value;
+  const mode =document.getElementById("af-mode").value;
+  document.getElementById("af-loading").classList.remove("hidden");
+  document.getElementById("af-tb").innerHTML="";
+  document.getElementById("af-summary-cards").classList.add("hidden");
+  let url=`/api/admin/report/advanced?mode=${mode}`;
+  if(cid)   url+=`&collegeId=${cid}`;
+  if(pid)   url+=`&programId=${pid}`;
+  if(fid)   url+=`&facultyId=${fid}`;
+  if(desig) url+=`&designation=${encodeURIComponent(desig)}`;
+  if(month) url+=`&month=${month}`;
+  else if(from&&to) url+=`&from=${from}&to=${to}`;
+  const res=await fetch(url,{cache:"no-store"});
+  const d=await res.json();
+  document.getElementById("af-loading").classList.add("hidden");
+  if(mode==="summary") renderAfSummary(d);
+  else renderAfDetail(d);
+}
+
+function renderAfSummary(d){
+  afData=d.faculty||[];
+  document.getElementById("af-summary-cards").classList.remove("hidden");
+  document.getElementById("af-s-total").textContent=afData.length;
+  const avgPres=afData.length?Math.round(afData.reduce((s,f)=>s+f.present,0)/afData.length):0;
+  const avgAbs =afData.length?Math.round(afData.reduce((s,f)=>s+f.absent,0)/afData.length):0;
+  const avgPct =afData.length?Math.round(afData.reduce((s,f)=>s+f.attendancePct,0)/afData.length):0;
+  document.getElementById("af-s-pres").textContent=avgPres;
+  document.getElementById("af-s-abs").textContent=avgAbs;
+  document.getElementById("af-s-pct").textContent=avgPct+"%";
+  document.getElementById("af-result-count").textContent=afData.length+" faculty";
+  document.getElementById("af-table-title").textContent="Attendance Summary";
+  document.getElementById("af-thead").innerHTML=`<tr><th>#</th><th>Photo</th><th>Name</th><th>Emp. ID</th><th>Designation</th><th>College</th><th>Program</th><th>Working Days</th><th>Present</th><th>Absent</th><th>Half Day</th><th>Attendance %</th></tr>`;
+  const tb=document.getElementById("af-tb");
+  if(!afData.length){tb.innerHTML='<tr><td colspan="12" class="text-center text-gray-400 py-8 text-sm">No faculty found for selected filters.</td></tr>';return;}
+  tb.innerHTML=afData.map((f,i)=>{
+    const pct=f.attendancePct;
+    const col=pct>=75?"#16a34a":pct>=50?"#f59e0b":"#dc2626";
+    const rc=pct>=75?"row-present":pct>=50?"row-halfday":"row-absent";
+    return `<tr class="${rc}">
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td>${thumb(f.faceImagePath,"")}</td>
+      <td class="font-bold text-primary text-sm">${f.name}</td>
+      <td class="text-accent font-bold text-sm">${f.employeeId}</td>
+      <td class="text-sm">${f.designation||"—"}</td>
+      <td class="text-sm">${f.college}</td>
+      <td class="text-sm">${f.program}</td>
+      <td class="text-center font-semibold">${f.workingDays}</td>
+      <td class="text-center"><span class="badge badge-present">${f.present}</span></td>
+      <td class="text-center"><span class="badge badge-absent">${f.absent}</span></td>
+      <td class="text-center"><span class="badge badge-halfday">${f.half_day}</span></td>
+      <td><div class="flex items-center gap-2">
+        <div class="progress flex-1" style="min-width:50px"><div class="progress-bar" style="width:${pct}%;background:${col}"></div></div>
+        <span class="text-xs font-black" style="color:${col}">${pct}%</span>
+      </div></td>
+    </tr>`;
+  }).join("");
+}
+
+function renderAfDetail(d){
+  afData=d.records||[];
+  document.getElementById("af-result-count").textContent=afData.length+" records";
+  document.getElementById("af-table-title").textContent="Attendance Detail";
+  document.getElementById("af-thead").innerHTML=`<tr><th>#</th><th>Photo</th><th>Name</th><th>Emp. ID</th><th>College</th><th>Program</th><th>Date</th><th>Check In</th><th>Check Out</th><th>Hours</th><th>Status</th></tr>`;
+  const tb=document.getElementById("af-tb");
+  if(!afData.length){tb.innerHTML='<tr><td colspan="11" class="text-center text-gray-400 py-8 text-sm">No attendance records found.</td></tr>';return;}
+  tb.innerHTML=afData.map((r,i)=>`
+    <tr class="${r.status==="absent"?"row-absent":r.status==="half_day"?"row-halfday":"row-present"}">
+      <td class="text-gray-400 font-bold">${i+1}</td>
+      <td>${thumb(r.face_image_path,"")}</td>
+      <td><p class="font-bold text-primary text-sm">${r.name}</p><p class="text-gray-400 text-xs">${r.designation||""}</p></td>
+      <td class="text-accent font-bold text-sm">${r.employee_id}</td>
+      <td class="text-sm">${r.college}</td>
+      <td class="text-sm">${r.program}</td>
+      <td class="font-semibold text-sm">${fmtDate(r.attendance_date)} <span class="text-gray-400 text-xs">${fmtDay(r.attendance_date)}</span></td>
+      <td class="text-green-700 font-bold">${r.check_in_time||"—"}</td>
+      <td class="text-purple-700 font-bold">${r.check_out_time||"—"}</td>
+      <td class="font-semibold">${r.working_hours||0}h</td>
+      <td>${badge(r.status)}</td>
+    </tr>`).join("");
+}
+
+function resetAttFilter(){
+  document.getElementById("af-college").value="";
+  document.getElementById("af-program").innerHTML='<option value="">All Programs</option>';
+  document.getElementById("af-faculty").innerHTML='<option value="">All Faculty</option>';
+  document.getElementById("af-desig").value="";
+  document.getElementById("af-month").value="";
+  const t=new Date(Date.now()+(5.5*60*60*1000)).toISOString().slice(0,10);
+  document.getElementById("af-from").value=t;
+  document.getElementById("af-to").value=t;
+  document.getElementById("af-mode").value="summary";
+  document.getElementById("af-tb").innerHTML="";
+  document.getElementById("af-thead").innerHTML="";
+  document.getElementById("af-summary-cards").classList.add("hidden");
+  document.getElementById("af-result-count").textContent="";
+}
+
+function exportAttFilter(){
+  if(!afData.length){alert("No data to export.");return;}
+  const mode=document.getElementById("af-mode").value;
+  let hdrs,body;
+  if(mode==="summary"){
+    hdrs=["Name","Emp. ID","Designation","College","Program","Working Days","Present","Absent","Half Day","Attendance %"];
+    body=afData.map(f=>[f.name,f.employeeId,f.designation,f.college,f.program,f.workingDays,f.present,f.absent,f.half_day,f.attendancePct+"%"]);
+  } else {
+    hdrs=["Name","Emp. ID","College","Program","Date","Check In","Check Out","Hours","Status"];
+    body=afData.map(r=>[r.name,r.employee_id,r.college,r.program,r.attendance_date,r.check_in_time||"",r.check_out_time||"",r.working_hours||0,r.status]);
+  }
+  const csv=[hdrs,...body].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+  a.download="attendance_filter_"+new Date(Date.now()+(5.5*60*60*1000)).toISOString().slice(0,10)+".csv";
+  a.click();
+}
+
+document.querySelectorAll("[id^='sec-']").forEach(el=>el.classList.add("sec-content"));
+init();
+</script>
+{% endblock %}
